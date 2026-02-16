@@ -102,11 +102,20 @@ export function listAiFunctions(): Promise<AiFunction[]> {
   return invoke("list_ai_functions");
 }
 
-export function executeAiFunction(
-  functionId: string,
-  text: string,
-): Promise<string> {
-  return invoke("execute_ai_function", { functionId, text });
+export function executeAiFunction(params: {
+  functionId: string;
+  text: string;
+  llmProvider: string;
+  llmApiKey: string;
+  llmModel: string;
+}): Promise<string> {
+  return invoke("execute_ai_function", params);
+}
+
+// ── Rules ─────────────────────────────────────────────────
+
+export function applyRules(text: string, enabledRuleIds: string[]): Promise<string> {
+  return invoke("apply_rules", { text, enabledRuleIds });
 }
 
 // ── History ────────────────────────────────────────────────
@@ -123,8 +132,8 @@ export interface HistoryItem {
   createdAt: string;
 }
 
-export function getHistory(): Promise<HistoryItem[]> {
-  return invoke("get_history");
+export function getHistory(limit = 100, offset = 0): Promise<HistoryItem[]> {
+  return invoke("get_history", { limit, offset });
 }
 
 export function searchHistory(query: string): Promise<HistoryItem[]> {
@@ -139,16 +148,16 @@ export function deleteHistoryItem(id: string): Promise<void> {
   return invoke("delete_history_item", { id });
 }
 
-export function saveHistoryItem(item: {
-  id: string;
+export function saveHistoryItem(params: {
+  sessionId: string;
   transcript: string;
-  processedText?: string;
+  processedText?: string | null;
   modelId: string;
-  language?: string;
-  aiFunction?: string;
-  durationMs?: number;
+  language?: string | null;
+  aiFunction?: string | null;
+  durationMs?: number | null;
 }): Promise<void> {
-  return invoke("save_history_item", { item });
+  return invoke("save_history_item", params);
 }
 
 // ── Vocabulary ─────────────────────────────────────────────

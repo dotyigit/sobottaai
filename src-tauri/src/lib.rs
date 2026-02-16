@@ -64,11 +64,12 @@ pub fn run() {
             commands::models::list_models,
             commands::models::download_model,
             commands::models::delete_model,
-            // AI Functions
+            // AI Functions & Rules
             commands::ai_functions::list_ai_functions,
             commands::ai_functions::execute_ai_function,
             commands::ai_functions::save_ai_function,
             commands::ai_functions::delete_ai_function,
+            commands::ai_functions::apply_rules,
             // History
             commands::history::get_history,
             commands::history::search_history,

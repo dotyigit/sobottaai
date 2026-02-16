@@ -23,6 +23,10 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
+    // Hydrate settings from disk
+    import("@/stores/settings-store").then(({ useSettingsStore }) => {
+      useSettingsStore.getState().hydrate();
+    });
   }, []);
 
   useEffect(() => {

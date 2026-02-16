@@ -1,3 +1,4 @@
+pub mod ai_functions;
 pub mod history;
 pub mod settings;
 pub mod vocabulary;

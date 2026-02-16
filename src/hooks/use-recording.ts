@@ -53,19 +53,47 @@ export function useRecording() {
     reset,
   } = useRecordingStore();
 
-  const { selectedModel, selectedLanguage } = useSettingsStore();
+  const {
+    selectedModel,
+    selectedLanguage,
+    selectedAiFunction,
+    rules,
+    llmProvider,
+    llmApiKey,
+    llmModel,
+  } = useSettingsStore();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
 
   const selectedModelRef = useRef(selectedModel);
   const selectedLanguageRef = useRef(selectedLanguage);
+  const selectedAiFunctionRef = useRef(selectedAiFunction);
+  const rulesRef = useRef(rules);
+  const llmProviderRef = useRef(llmProvider);
+  const llmApiKeyRef = useRef(llmApiKey);
+  const llmModelRef = useRef(llmModel);
   useEffect(() => {
     selectedModelRef.current = selectedModel;
   }, [selectedModel]);
   useEffect(() => {
     selectedLanguageRef.current = selectedLanguage;
   }, [selectedLanguage]);
+  useEffect(() => {
+    selectedAiFunctionRef.current = selectedAiFunction;
+  }, [selectedAiFunction]);
+  useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
+  useEffect(() => {
+    llmProviderRef.current = llmProvider;
+  }, [llmProvider]);
+  useEffect(() => {
+    llmApiKeyRef.current = llmApiKey;
+  }, [llmApiKey]);
+  useEffect(() => {
+    llmModelRef.current = llmModel;
+  }, [llmModel]);
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -81,23 +109,75 @@ export function useRecording() {
     }
   }, []);
 
-  // Transcribe and auto-paste
+  // Transcribe → apply rules → AI function → paste → save history
   const transcribeAndPaste = useCallback(
-    async (sid: string) => {
+    async (sid: string, recordingDurationMs?: number) => {
       setIsTranscribing(true);
       try {
         const lang = selectedLanguageRef.current;
+        const modelId = selectedModelRef.current;
+        const aiFunctionId = selectedAiFunctionRef.current;
+        const enabledRules = rulesRef.current
+          .filter((r) => r.enabled)
+          .map((r) => r.id);
+
+        // Step 1: Transcribe
         const result = await tauriInvoke<TranscriptionResult>("transcribe", {
           sessionId: sid,
-          modelId: selectedModelRef.current,
+          modelId,
           language: lang === "auto" ? null : lang,
         });
 
-        setLastResult(result.text);
-
-        if (result.text.trim()) {
-          await tauriInvoke("paste_text", { text: result.text });
+        if (!result.text.trim()) {
+          setLastResult("");
+          return;
         }
+
+        let finalText = result.text;
+
+        // Step 2: Apply regex rules (filler removal, punctuation)
+        if (enabledRules.length > 0) {
+          finalText = await tauriInvoke<string>("apply_rules", {
+            text: finalText,
+            enabledRuleIds: enabledRules,
+          });
+        }
+
+        // Step 3: Apply AI function (if selected and API key configured)
+        let processedText: string | null = null;
+        if (aiFunctionId && llmApiKeyRef.current) {
+          try {
+            processedText = await tauriInvoke<string>("execute_ai_function", {
+              text: finalText,
+              functionId: aiFunctionId,
+              llmProvider: llmProviderRef.current,
+              llmApiKey: llmApiKeyRef.current,
+              llmModel: llmModelRef.current,
+            });
+            finalText = processedText;
+          } catch (err) {
+            console.error("AI function failed:", err);
+            // Continue with un-processed text
+          }
+        }
+
+        setLastResult(finalText);
+
+        // Step 4: Paste
+        await tauriInvoke("paste_text", { text: finalText });
+
+        // Step 5: Save to history
+        await tauriInvoke("save_history_item", {
+          sessionId: sid,
+          transcript: result.text,
+          processedText,
+          modelId,
+          language: lang === "auto" ? null : lang,
+          aiFunction: aiFunctionId,
+          durationMs: recordingDurationMs ?? result.durationMs,
+        }).catch((err: unknown) => {
+          console.error("Failed to save history:", err);
+        });
       } catch (err) {
         console.error("Transcription failed:", err);
         setLastResult(`[Error: ${err}]`);
@@ -135,7 +215,7 @@ export function useRecording() {
       setSessionId(result.sessionId);
       setDurationMs(result.durationMs);
 
-      await transcribeAndPaste(result.sessionId);
+      await transcribeAndPaste(result.sessionId, result.durationMs);
     } catch (err) {
       console.error("Failed to stop recording:", err);
       reset();
@@ -177,7 +257,7 @@ export function useRecording() {
           setIsRecording(false);
           setSessionId(payload.sessionId);
           setDurationMs(payload.durationMs);
-          transcribeAndPaste(payload.sessionId);
+          transcribeAndPaste(payload.sessionId, payload.durationMs);
         }),
       );
     };
