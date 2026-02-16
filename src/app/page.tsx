@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, MicOff, History, Settings, Keyboard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import { useRecording } from "@/hooks/use-recording";
 
 export default function Home() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const {
     isRecording,
     isTranscribing,
@@ -22,13 +22,25 @@ export default function Home() {
   } = useRecording();
 
   useEffect(() => {
-    const unlisten = listen<string>("navigate", (event) => {
-      router.push(event.payload);
-    });
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let unlisten: (() => void) | undefined;
+
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<string>("navigate", (event) => {
+        router.push(event.payload);
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    }).catch(() => {});
+
     return () => {
-      unlisten.then((f) => f());
+      unlisten?.();
     };
-  }, [router]);
+  }, [mounted, router]);
 
   const seconds = Math.floor(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);

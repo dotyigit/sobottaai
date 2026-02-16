@@ -1,15 +1,41 @@
 import { useCallback, useEffect, useRef } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useRecordingStore } from "@/stores/recording-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import * as commands from "@/lib/tauri-commands";
+
+// Lazy import helpers to avoid crashes when Tauri IPC isn't ready
+async function tauriListen<T>(
+  event: string,
+  handler: (payload: T) => void,
+): Promise<(() => void) | undefined> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<T>(event, (e) => handler(e.payload));
+  } catch {
+    return undefined;
+  }
+}
+
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(cmd, args);
+}
+
+interface StopResult {
+  sessionId: string;
+  durationMs: number;
+  sampleCount: number;
+}
+
+interface TranscriptionResult {
+  text: string;
+  language: string | null;
+  segments: { startMs: number; endMs: number; text: string }[];
+  durationMs: number;
+}
 
 /**
  * Hook that orchestrates the full recording pipeline:
  * hotkey/click → record → stop → transcribe → paste
- *
- * The global hotkey (Cmd+Shift+Space) handles start/stop in Rust.
- * This hook listens for the events and runs transcription + paste.
  */
 export function useRecording() {
   const {
@@ -32,7 +58,6 @@ export function useRecording() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  // Refs to access latest values in event callbacks
   const selectedModelRef = useRef(selectedModel);
   const selectedLanguageRef = useRef(selectedLanguage);
   useEffect(() => {
@@ -58,24 +83,20 @@ export function useRecording() {
 
   // Transcribe and auto-paste
   const transcribeAndPaste = useCallback(
-    async (sessionId: string, durationMs: number) => {
+    async (sid: string) => {
       setIsTranscribing(true);
       try {
         const lang = selectedLanguageRef.current;
-        const result = await commands.transcribe(
-          sessionId,
-          selectedModelRef.current,
-          lang === "auto" ? undefined : lang,
-        );
+        const result = await tauriInvoke<TranscriptionResult>("transcribe", {
+          sessionId: sid,
+          modelId: selectedModelRef.current,
+          language: lang === "auto" ? null : lang,
+        });
 
         setLastResult(result.text);
 
         if (result.text.trim()) {
-          // Auto-paste into the active application
-          await commands.pasteText(result.text);
-          console.log(
-            `Transcribed and pasted (${result.durationMs}ms): ${result.text}`,
-          );
+          await tauriInvoke("paste_text", { text: result.text });
         }
       } catch (err) {
         console.error("Transcription failed:", err);
@@ -92,10 +113,10 @@ export function useRecording() {
     if (isRecording) return;
     try {
       reset();
-      await commands.startRecording();
+      await tauriInvoke("start_recording");
       setIsRecording(true);
       startTimer();
-      await commands.showRecordingBar().catch(() => {});
+      await tauriInvoke("show_recording_bar").catch(() => {});
     } catch (err) {
       console.error("Failed to start recording:", err);
       reset();
@@ -108,14 +129,13 @@ export function useRecording() {
     try {
       stopTimer();
       setIsRecording(false);
-      await commands.hideRecordingBar().catch(() => {});
+      await tauriInvoke("hide_recording_bar").catch(() => {});
 
-      const result = await commands.stopRecording();
+      const result = await tauriInvoke<StopResult>("stop_recording");
       setSessionId(result.sessionId);
       setDurationMs(result.durationMs);
 
-      // Transcribe and paste
-      await transcribeAndPaste(result.sessionId, result.durationMs);
+      await transcribeAndPaste(result.sessionId);
     } catch (err) {
       console.error("Failed to stop recording:", err);
       reset();
@@ -130,7 +150,6 @@ export function useRecording() {
     reset,
   ]);
 
-  // Toggle recording (for button clicks)
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording();
@@ -139,39 +158,34 @@ export function useRecording() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  // Listen for hotkey events from Rust
-  // In push-to-talk mode, Rust handles start/stop recording directly.
-  // We listen for recording-stopped to trigger transcription + paste.
+  // Listen for Tauri events from the Rust backend
   useEffect(() => {
-    const unlisteners: Promise<() => void>[] = [];
+    const cleanups: ((() => void) | undefined)[] = [];
 
-    // Recording started (from hotkey or manual)
-    unlisteners.push(
-      listen("recording-started", () => {
-        setIsRecording(true);
-        setDurationMs(0);
-        startTimer();
-      }),
-    );
+    const setup = async () => {
+      cleanups.push(
+        await tauriListen("recording-started", () => {
+          setIsRecording(true);
+          setDurationMs(0);
+          startTimer();
+        }),
+      );
 
-    // Recording stopped (from hotkey or manual) — trigger transcription
-    unlisteners.push(
-      listen<commands.StopResult>("recording-stopped", (event) => {
-        stopTimer();
-        setIsRecording(false);
-        setSessionId(event.payload.sessionId);
-        setDurationMs(event.payload.durationMs);
+      cleanups.push(
+        await tauriListen<StopResult>("recording-stopped", (payload) => {
+          stopTimer();
+          setIsRecording(false);
+          setSessionId(payload.sessionId);
+          setDurationMs(payload.durationMs);
+          transcribeAndPaste(payload.sessionId);
+        }),
+      );
+    };
 
-        // Run transcription + auto-paste
-        transcribeAndPaste(
-          event.payload.sessionId,
-          event.payload.durationMs,
-        );
-      }),
-    );
+    setup();
 
     return () => {
-      unlisteners.forEach((p) => p.then((f) => f()));
+      cleanups.forEach((fn) => fn?.());
     };
   }, [
     setIsRecording,

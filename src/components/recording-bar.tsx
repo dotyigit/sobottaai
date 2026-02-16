@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+async function tauriListen<T>(
+  event: string,
+  handler: (payload: T) => void,
+): Promise<(() => void) | undefined> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<T>(event, (e) => handler(e.payload));
+  } catch {
+    return undefined;
+  }
+}
 import { cn } from "@/lib/utils";
 
 export function RecordingBar() {
@@ -9,14 +19,21 @@ export function RecordingBar() {
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const unlisten1 = listen("recording-started", () => {
-      setIsRecording(true);
-      setDuration(0);
-    });
-    const unlisten2 = listen("recording-stopped", () => setIsRecording(false));
+    const cleanups: ((() => void) | undefined)[] = [];
+    const setup = async () => {
+      cleanups.push(
+        await tauriListen("recording-started", () => {
+          setIsRecording(true);
+          setDuration(0);
+        }),
+      );
+      cleanups.push(
+        await tauriListen("recording-stopped", () => setIsRecording(false)),
+      );
+    };
+    setup();
     return () => {
-      unlisten1.then((f) => f());
-      unlisten2.then((f) => f());
+      cleanups.forEach((fn) => fn?.());
     };
   }, []);
 

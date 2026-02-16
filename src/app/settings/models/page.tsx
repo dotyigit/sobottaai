@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+async function tauriListen<T>(
+  event: string,
+  handler: (payload: T) => void,
+): Promise<(() => void) | undefined> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<T>(event, (e) => handler(e.payload));
+  } catch {
+    return undefined;
+  }
+}
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -38,14 +48,17 @@ export default function ModelSettings() {
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<DownloadProgress>(
+    let cleanup: (() => void) | undefined;
+    tauriListen<DownloadProgress>(
       "model-download-progress",
-      (event) => {
-        setProgress(event.payload);
+      (payload) => {
+        setProgress(payload);
       },
-    );
+    ).then((fn) => {
+      cleanup = fn;
+    });
     return () => {
-      unlisten.then((f) => f());
+      cleanup?.();
     };
   }, []);
 
