@@ -3,17 +3,23 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useRouter } from "next/navigation";
-import { Mic, History, Settings, Keyboard } from "lucide-react";
+import { Mic, MicOff, History, Settings, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModelSelector } from "@/components/model-selector";
 import { LanguageSelector } from "@/components/language-selector";
 import { AiFunctionPicker } from "@/components/ai-function-picker";
-import { useRecordingStore } from "@/stores/recording-store";
+import { useRecording } from "@/hooks/use-recording";
 
 export default function Home() {
   const router = useRouter();
-  const { isRecording } = useRecordingStore();
+  const {
+    isRecording,
+    isTranscribing,
+    durationMs,
+    lastResult,
+    toggleRecording,
+  } = useRecording();
 
   useEffect(() => {
     const unlisten = listen<string>("navigate", (event) => {
@@ -23,6 +29,10 @@ export default function Home() {
       unlisten.then((f) => f());
     };
   }, [router]);
+
+  const seconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
 
   return (
     <div className="flex h-screen flex-col">
@@ -45,21 +55,53 @@ export default function Home() {
       {/* Main content */}
       <main className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="rounded-full border-2 border-dashed border-muted-foreground/25 p-8">
-            <Mic className={`h-12 w-12 ${isRecording ? "text-red-500 animate-pulse" : "text-muted-foreground"}`} />
-          </div>
+          {/* Record button */}
+          <button
+            onClick={toggleRecording}
+            disabled={isTranscribing}
+            className={`rounded-full p-8 transition-all duration-200 ${
+              isRecording
+                ? "bg-red-500/10 border-2 border-red-500 shadow-lg shadow-red-500/20"
+                : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/50"
+            }`}
+          >
+            {isRecording ? (
+              <MicOff className="h-12 w-12 text-red-500 animate-pulse" />
+            ) : (
+              <Mic className="h-12 w-12 text-muted-foreground" />
+            )}
+          </button>
+
           <h2 className="text-2xl font-semibold">
-            {isRecording ? "Recording..." : "Ready to record"}
+            {isRecording
+              ? `Recording ${minutes}:${secs.toString().padStart(2, "0")}`
+              : isTranscribing
+                ? "Transcribing..."
+                : "Ready to record"}
           </h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Press{" "}
-            <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-              <Keyboard className="inline h-3 w-3 mr-1" />
-              Cmd+Shift+Space
-            </kbd>{" "}
-            to start recording. Speak naturally and release to transcribe.
+            {isRecording ? (
+              "Click the button or release the hotkey to stop recording."
+            ) : (
+              <>
+                Click the button or press{" "}
+                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  <Keyboard className="inline h-3 w-3 mr-1" />
+                  Cmd+Shift+Space
+                </kbd>{" "}
+                to start recording.
+              </>
+            )}
           </p>
         </div>
+
+        {/* Last result */}
+        {lastResult && (
+          <div className="w-full max-w-2xl rounded-lg border bg-muted/30 p-4">
+            <p className="text-sm text-muted-foreground mb-1">Last transcription</p>
+            <p className="text-sm">{lastResult}</p>
+          </div>
+        )}
 
         {/* Quick settings */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl">

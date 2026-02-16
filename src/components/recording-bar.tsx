@@ -9,7 +9,10 @@ export function RecordingBar() {
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const unlisten1 = listen("recording-started", () => setIsRecording(true));
+    const unlisten1 = listen("recording-started", () => {
+      setIsRecording(true);
+      setDuration(0);
+    });
     const unlisten2 = listen("recording-stopped", () => setIsRecording(false));
     return () => {
       unlisten1.then((f) => f());
@@ -19,7 +22,8 @@ export function RecordingBar() {
 
   useEffect(() => {
     if (!isRecording) return;
-    const interval = setInterval(() => setDuration((d) => d + 100), 100);
+    const start = Date.now();
+    const interval = setInterval(() => setDuration(Date.now() - start), 100);
     return () => clearInterval(interval);
   }, [isRecording]);
 
@@ -30,21 +34,31 @@ export function RecordingBar() {
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-full px-4 py-2",
-        "bg-zinc-900/90 backdrop-blur-md border border-zinc-700/50",
-        "shadow-2xl text-white text-sm"
+        "flex items-center gap-3 rounded-full px-5 py-2.5",
+        "bg-zinc-900/95 backdrop-blur-md border border-zinc-700/50",
+        "shadow-2xl text-white text-sm select-none"
       )}
     >
+      {/* Recording indicator */}
       <div
         className={cn(
-          "h-3 w-3 rounded-full",
+          "h-3 w-3 rounded-full shrink-0",
           isRecording ? "bg-red-500 animate-pulse" : "bg-zinc-500"
         )}
       />
+
+      {/* Duration */}
       <span className="font-mono tabular-nums min-w-[48px]">
         {minutes}:{secs.toString().padStart(2, "0")}
       </span>
-      <span className="text-xs text-zinc-400">Recording</span>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-zinc-600" />
+
+      {/* Status */}
+      <span className="text-xs text-zinc-400">
+        {isRecording ? "Recording" : "Processing..."}
+      </span>
     </div>
   );
 }
