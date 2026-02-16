@@ -1,0 +1,9 @@
+pub mod ai_functions;
+pub mod audio_import;
+pub mod clipboard;
+pub mod history;
+pub mod models;
+pub mod recording;
+pub mod settings;
+pub mod transcription;
+pub mod vocabulary;

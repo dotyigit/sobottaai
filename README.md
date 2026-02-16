@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SobottaAI
 
-## Getting Started
+Open-source, cross-platform voice-to-text desktop app with AI post-processing. Press a hotkey, speak, and your transcribed text is automatically pasted into any application.
 
-First, run the development server:
+Built with **Tauri v2** (Rust) + **Next.js** + **shadcn/ui**.
+
+## Features
+
+- **Push-to-talk dictation** — Global hotkey triggers recording; release to transcribe and paste
+- **Local AI transcription** — Whisper (whisper.cpp) and NVIDIA Parakeet models run entirely on-device
+- **Cloud STT** — Optional OpenAI Whisper API and Groq Whisper API (BYOK)
+- **AI post-processing** — Professional email, code prompt, summarize, casual rewrite, translate
+- **Text rules** — Filler word removal, smart punctuation, grammar correction (stackable)
+- **Custom vocabulary** — Add specialized terms to improve transcription accuracy
+- **Recording history** — Browse, search, replay, and re-transcribe past recordings
+- **Cross-platform** — macOS, Windows, Linux
+- **Privacy-first** — All processing happens locally by default; cloud features are opt-in BYOK
+
+## Supported Models
+
+### Local STT
+| Model | Size | Languages |
+|---|---|---|
+| Whisper Tiny | 78 MB | 99 languages |
+| Whisper Base | 148 MB | 99 languages |
+| Whisper Small | 488 MB | 99 languages |
+| Whisper Medium | 1.5 GB | 99 languages |
+| Whisper Large V3 Turbo | 1.6 GB | 99 languages |
+| NVIDIA Parakeet TDT 0.6B v2 | ~1.2 GB | English |
+| NVIDIA Parakeet TDT 0.6B v3 | ~1.2 GB | 25 languages |
+
+### LLM Providers (Optional, BYOK)
+- OpenAI
+- Anthropic
+- Groq
+- Ollama (local)
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- [pnpm](https://pnpm.io/)
+- [Rust](https://rustup.rs/) (latest stable)
+- Platform-specific dependencies:
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - **Windows**: MSVC Build Tools
+  - **Linux**: `libasound2-dev`, `libwebkit2gtk-4.1-dev`, `patchelf`
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+pnpm install
+
+# Run in development mode
+pnpm tauri dev
+
+# Build for production
+pnpm tauri build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Layer | Technology |
+|---|---|
+| Desktop framework | Tauri v2 (Rust backend + webview) |
+| Frontend | Next.js (static export) + shadcn/ui + Tailwind CSS |
+| State management | Zustand |
+| Local STT | whisper-rs, parakeet-rs |
+| Audio capture | cpal + hound |
+| Keyboard simulation | enigo |
+| Database | SQLite (rusqlite) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## License
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)
