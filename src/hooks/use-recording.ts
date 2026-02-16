@@ -6,10 +6,10 @@ import * as commands from "@/lib/tauri-commands";
 
 /**
  * Hook that orchestrates the full recording pipeline:
- * start → capture audio → stop → transcribe → (rules → AI function → paste)
+ * hotkey/click → record → stop → transcribe → paste
  *
- * Phase 3 adds transcription after recording stops.
- * Rules, AI functions, and paste will be wired in Phase 5.
+ * The global hotkey (Cmd+Shift+Space) handles start/stop in Rust.
+ * This hook listens for the events and runs transcription + paste.
  */
 export function useRecording() {
   const {
@@ -32,7 +32,16 @@ export function useRecording() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  // Duration timer
+  // Refs to access latest values in event callbacks
+  const selectedModelRef = useRef(selectedModel);
+  const selectedLanguageRef = useRef(selectedLanguage);
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+  useEffect(() => {
+    selectedLanguageRef.current = selectedLanguage;
+  }, [selectedLanguage]);
+
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
@@ -47,10 +56,40 @@ export function useRecording() {
     }
   }, []);
 
-  // Start recording
+  // Transcribe and auto-paste
+  const transcribeAndPaste = useCallback(
+    async (sessionId: string, durationMs: number) => {
+      setIsTranscribing(true);
+      try {
+        const lang = selectedLanguageRef.current;
+        const result = await commands.transcribe(
+          sessionId,
+          selectedModelRef.current,
+          lang === "auto" ? undefined : lang,
+        );
+
+        setLastResult(result.text);
+
+        if (result.text.trim()) {
+          // Auto-paste into the active application
+          await commands.pasteText(result.text);
+          console.log(
+            `Transcribed and pasted (${result.durationMs}ms): ${result.text}`,
+          );
+        }
+      } catch (err) {
+        console.error("Transcription failed:", err);
+        setLastResult(`[Error: ${err}]`);
+      } finally {
+        setIsTranscribing(false);
+      }
+    },
+    [setIsTranscribing, setLastResult],
+  );
+
+  // Manual start recording (from button click)
   const startRecording = useCallback(async () => {
     if (isRecording) return;
-
     try {
       reset();
       await commands.startRecording();
@@ -60,14 +99,12 @@ export function useRecording() {
     } catch (err) {
       console.error("Failed to start recording:", err);
       reset();
-      throw err;
     }
   }, [isRecording, reset, setIsRecording, startTimer]);
 
-  // Stop recording and transcribe
+  // Manual stop recording (from button click)
   const stopRecording = useCallback(async () => {
     if (!isRecording) return;
-
     try {
       stopTimer();
       setIsRecording(false);
@@ -77,32 +114,11 @@ export function useRecording() {
       setSessionId(result.sessionId);
       setDurationMs(result.durationMs);
 
-      // Transcribe the recording
-      setIsTranscribing(true);
-      try {
-        const transcription = await commands.transcribe(
-          result.sessionId,
-          selectedModel,
-          selectedLanguage === "auto" ? undefined : selectedLanguage,
-        );
-        setLastResult(transcription.text);
-
-        // TODO Phase 5: apply rules → AI function → paste
-        console.log(
-          `Transcription (${transcription.durationMs}ms): ${transcription.text}`,
-        );
-      } catch (err) {
-        console.error("Transcription failed:", err);
-        setLastResult(`[Transcription failed: ${err}]`);
-      } finally {
-        setIsTranscribing(false);
-      }
-
-      return result;
+      // Transcribe and paste
+      await transcribeAndPaste(result.sessionId, result.durationMs);
     } catch (err) {
       console.error("Failed to stop recording:", err);
       reset();
-      throw err;
     }
   }, [
     isRecording,
@@ -110,14 +126,11 @@ export function useRecording() {
     setIsRecording,
     setSessionId,
     setDurationMs,
-    setIsTranscribing,
-    setLastResult,
-    selectedModel,
-    selectedLanguage,
+    transcribeAndPaste,
     reset,
   ]);
 
-  // Toggle recording (for toggle mode)
+  // Toggle recording (for button clicks)
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording();
@@ -126,27 +139,34 @@ export function useRecording() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  // Listen for Tauri events
+  // Listen for hotkey events from Rust
+  // In push-to-talk mode, Rust handles start/stop recording directly.
+  // We listen for recording-stopped to trigger transcription + paste.
   useEffect(() => {
     const unlisteners: Promise<() => void>[] = [];
 
+    // Recording started (from hotkey or manual)
     unlisteners.push(
       listen("recording-started", () => {
-        if (!isRecording) {
-          setIsRecording(true);
-          startTimer();
-        }
+        setIsRecording(true);
+        setDurationMs(0);
+        startTimer();
       }),
     );
 
+    // Recording stopped (from hotkey or manual) — trigger transcription
     unlisteners.push(
       listen<commands.StopResult>("recording-stopped", (event) => {
-        if (isRecording) {
-          stopTimer();
-          setIsRecording(false);
-          setSessionId(event.payload.sessionId);
-          setDurationMs(event.payload.durationMs);
-        }
+        stopTimer();
+        setIsRecording(false);
+        setSessionId(event.payload.sessionId);
+        setDurationMs(event.payload.durationMs);
+
+        // Run transcription + auto-paste
+        transcribeAndPaste(
+          event.payload.sessionId,
+          event.payload.durationMs,
+        );
       }),
     );
 
@@ -154,12 +174,12 @@ export function useRecording() {
       unlisteners.forEach((p) => p.then((f) => f()));
     };
   }, [
-    isRecording,
     setIsRecording,
     setSessionId,
     setDurationMs,
     startTimer,
     stopTimer,
+    transcribeAndPaste,
   ]);
 
   // Cleanup timer on unmount

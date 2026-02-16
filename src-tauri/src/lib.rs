@@ -43,6 +43,11 @@ pub fn run() {
             // Setup system tray
             system::tray::setup_tray(&app_handle)?;
 
+            // Register global hotkey for push-to-talk
+            if let Err(e) = system::hotkey::register_hotkey(&app_handle) {
+                log::error!("Failed to register global hotkey: {:?}", e);
+            }
+
             log::info!("SobottaAI started successfully");
             Ok(())
         })

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useRouter } from "next/navigation";
-import { Mic, MicOff, History, Settings, Keyboard } from "lucide-react";
+import { Mic, MicOff, History, Settings, Keyboard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModelSelector } from "@/components/model-selector";
@@ -62,11 +62,15 @@ export default function Home() {
             className={`rounded-full p-8 transition-all duration-200 ${
               isRecording
                 ? "bg-red-500/10 border-2 border-red-500 shadow-lg shadow-red-500/20"
-                : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/50"
+                : isTranscribing
+                  ? "border-2 border-muted-foreground/25 opacity-60 cursor-wait"
+                  : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/50"
             }`}
           >
             {isRecording ? (
               <MicOff className="h-12 w-12 text-red-500 animate-pulse" />
+            ) : isTranscribing ? (
+              <Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />
             ) : (
               <Mic className="h-12 w-12 text-muted-foreground" />
             )}
