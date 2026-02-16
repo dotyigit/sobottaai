@@ -5,11 +5,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import * as commands from "@/lib/tauri-commands";
 
 /**
- * Hook that orchestrates the recording pipeline:
- * start → capture audio → stop → (transcribe → rules → AI function → paste)
+ * Hook that orchestrates the full recording pipeline:
+ * start → capture audio → stop → transcribe → (rules → AI function → paste)
  *
- * Phase 2 covers start/stop recording.
- * Transcription and post-processing will be wired in Phase 4.
+ * Phase 3 adds transcription after recording stops.
+ * Rules, AI functions, and paste will be wired in Phase 5.
  */
 export function useRecording() {
   const {
@@ -27,8 +27,7 @@ export function useRecording() {
     reset,
   } = useRecordingStore();
 
-  const { selectedModel, selectedLanguage, selectedAiFunction } =
-    useSettingsStore();
+  const { selectedModel, selectedLanguage } = useSettingsStore();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -57,7 +56,6 @@ export function useRecording() {
       await commands.startRecording();
       setIsRecording(true);
       startTimer();
-      // Show floating recording bar
       await commands.showRecordingBar().catch(() => {});
     } catch (err) {
       console.error("Failed to start recording:", err);
@@ -66,25 +64,39 @@ export function useRecording() {
     }
   }, [isRecording, reset, setIsRecording, startTimer]);
 
-  // Stop recording
+  // Stop recording and transcribe
   const stopRecording = useCallback(async () => {
     if (!isRecording) return;
 
     try {
       stopTimer();
       setIsRecording(false);
-      // Hide floating recording bar
       await commands.hideRecordingBar().catch(() => {});
 
       const result = await commands.stopRecording();
       setSessionId(result.sessionId);
       setDurationMs(result.durationMs);
 
-      // TODO Phase 4: transcribe → apply rules → AI function → paste
-      // For now, just log the session
-      console.log(
-        `Recording complete: session=${result.sessionId}, duration=${result.durationMs}ms, samples=${result.sampleCount}`,
-      );
+      // Transcribe the recording
+      setIsTranscribing(true);
+      try {
+        const transcription = await commands.transcribe(
+          result.sessionId,
+          selectedModel,
+          selectedLanguage === "auto" ? undefined : selectedLanguage,
+        );
+        setLastResult(transcription.text);
+
+        // TODO Phase 5: apply rules → AI function → paste
+        console.log(
+          `Transcription (${transcription.durationMs}ms): ${transcription.text}`,
+        );
+      } catch (err) {
+        console.error("Transcription failed:", err);
+        setLastResult(`[Transcription failed: ${err}]`);
+      } finally {
+        setIsTranscribing(false);
+      }
 
       return result;
     } catch (err) {
@@ -92,7 +104,18 @@ export function useRecording() {
       reset();
       throw err;
     }
-  }, [isRecording, stopTimer, setIsRecording, setSessionId, setDurationMs, reset]);
+  }, [
+    isRecording,
+    stopTimer,
+    setIsRecording,
+    setSessionId,
+    setDurationMs,
+    setIsTranscribing,
+    setLastResult,
+    selectedModel,
+    selectedLanguage,
+    reset,
+  ]);
 
   // Toggle recording (for toggle mode)
   const toggleRecording = useCallback(async () => {
@@ -103,13 +126,12 @@ export function useRecording() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  // Listen for Tauri events (from hotkey or other sources)
+  // Listen for Tauri events
   useEffect(() => {
     const unlisteners: Promise<() => void>[] = [];
 
     unlisteners.push(
       listen("recording-started", () => {
-        // Sync state if recording was started externally (e.g. hotkey)
         if (!isRecording) {
           setIsRecording(true);
           startTimer();
@@ -131,7 +153,14 @@ export function useRecording() {
     return () => {
       unlisteners.forEach((p) => p.then((f) => f()));
     };
-  }, [isRecording, setIsRecording, setSessionId, setDurationMs, startTimer, stopTimer]);
+  }, [
+    isRecording,
+    setIsRecording,
+    setSessionId,
+    setDurationMs,
+    startTimer,
+    stopTimer,
+  ]);
 
   // Cleanup timer on unmount
   useEffect(() => {

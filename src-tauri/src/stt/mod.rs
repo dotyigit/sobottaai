@@ -1,5 +1,6 @@
 pub mod cloud_groq;
 pub mod cloud_openai;
+pub mod whisper;
 
 use serde::{Deserialize, Serialize};
 

@@ -26,11 +26,18 @@ export function hideRecordingBar(): Promise<void> {
 
 // ── Transcription ──────────────────────────────────────────
 
+export interface TranscriptionResult {
+  text: string;
+  language: string | null;
+  segments: { startMs: number; endMs: number; text: string }[];
+  durationMs: number;
+}
+
 export function transcribe(
   sessionId: string,
   modelId: string,
   language?: string,
-): Promise<string> {
+): Promise<TranscriptionResult> {
   return invoke("transcribe", { sessionId, modelId, language });
 }
 
@@ -38,7 +45,7 @@ export function transcribeFile(
   path: string,
   modelId: string,
   language?: string,
-): Promise<string> {
+): Promise<TranscriptionResult> {
   return invoke("transcribe_file", { path, modelId, language });
 }
 

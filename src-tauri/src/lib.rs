@@ -28,6 +28,7 @@ pub fn run() {
                 .build(),
         )
         .manage(commands::recording::RecordingState::new())
+        .manage(commands::transcription::SttManager::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
 

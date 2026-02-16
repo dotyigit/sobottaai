@@ -46,8 +46,8 @@ src-tauri/gen/
 src-tauri/WixTools/
 src-tauri/icons/icon.ico.bak
 
-# Models (downloaded at runtime)
-models/
+# Models (downloaded at runtime, stored in app data dir)
+/models/
 
 # SQLite
 *.db

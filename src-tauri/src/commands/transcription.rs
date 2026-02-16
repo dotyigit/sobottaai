@@ -1,35 +1,124 @@
 use crate::commands::recording::{self, RecordingState};
-use crate::stt::TranscriptionResult;
-use tauri::State;
+use crate::models;
+use crate::stt::whisper::WhisperEngine;
+use crate::stt::{SttEngine, TranscriptionOptions, TranscriptionResult};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager, State};
+
+/// Manages loaded STT engine instances (cached to avoid re-loading models).
+pub struct SttManager {
+    engines: Mutex<HashMap<String, Arc<dyn SttEngine>>>,
+}
+
+impl SttManager {
+    pub fn new() -> Self {
+        Self {
+            engines: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Get or load a Whisper engine for the given model.
+    fn get_or_load(
+        &self,
+        model_id: &str,
+        app_data_dir: &PathBuf,
+    ) -> Result<Arc<dyn SttEngine>, String> {
+        let mut engines = self.engines.lock().unwrap();
+
+        if let Some(engine) = engines.get(model_id) {
+            return Ok(engine.clone());
+        }
+
+        let catalog = models::full_catalog();
+        let model_info = catalog
+            .iter()
+            .find(|m| m.id == model_id)
+            .ok_or_else(|| format!("Unknown model: {}", model_id))?;
+
+        if !models::is_model_downloaded(app_data_dir, model_info) {
+            return Err(format!("Model '{}' is not downloaded", model_id));
+        }
+
+        let model_dir = models::model_path(app_data_dir, model_id);
+
+        let engine: Arc<dyn SttEngine> = match model_info.engine {
+            models::Engine::Whisper => {
+                let model_file = &model_info.files[0];
+                let model_path = model_dir.join(model_file);
+                let whisper = WhisperEngine::new(&model_path)
+                    .map_err(|e| format!("Failed to load Whisper model: {}", e))?;
+                Arc::new(whisper)
+            }
+            models::Engine::Parakeet => {
+                return Err(
+                    "Parakeet engine not yet implemented. Please use a Whisper model.".into(),
+                );
+            }
+        };
+
+        engines.insert(model_id.to_string(), engine.clone());
+        log::info!("STT engine cached for model: {}", model_id);
+        Ok(engine)
+    }
+
+    /// Clear cached engine for a specific model (e.g., after model deletion).
+    pub fn evict(&self, model_id: &str) {
+        self.engines.lock().unwrap().remove(model_id);
+    }
+}
 
 #[tauri::command]
 pub async fn transcribe(
-    state: State<'_, RecordingState>,
+    app: AppHandle,
+    recording_state: State<'_, RecordingState>,
+    stt_manager: State<'_, SttManager>,
     session_id: String,
     model_id: String,
     language: Option<String>,
 ) -> Result<TranscriptionResult, String> {
-    let audio = recording::get_session_audio(&state, &session_id)
+    let audio = recording::get_session_audio(&recording_state, &session_id)
         .ok_or("Session not found")?;
 
-    // TODO: Phase 3 - dispatch to whisper/parakeet based on model_id
-    let _ = model_id;
-    let _ = language;
+    if audio.is_empty() {
+        return Err("No audio data in session".into());
+    }
 
-    Ok(TranscriptionResult {
-        text: format!("[Transcription placeholder - {} samples]", audio.len()),
-        language: None,
-        segments: vec![],
-        duration_ms: (audio.len() as f64 / 16.0) as u64,
-    })
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    let engine = stt_manager.get_or_load(&model_id, &app_data_dir)?;
+
+    let options = TranscriptionOptions {
+        language,
+        vocabulary: vec![],
+    };
+
+    // Run transcription on a blocking thread (whisper inference is CPU-intensive)
+    let result = tokio::task::spawn_blocking(move || engine.transcribe(&audio, &options))
+        .await
+        .map_err(|e| format!("Transcription task failed: {}", e))?
+        .map_err(|e| format!("Transcription failed: {}", e))?;
+
+    Ok(result)
 }
 
 #[tauri::command]
 pub async fn transcribe_file(
-    state: State<'_, RecordingState>,
+    app: AppHandle,
+    recording_state: State<'_, RecordingState>,
+    stt_manager: State<'_, SttManager>,
     session_id: String,
     model_id: String,
     language: Option<String>,
 ) -> Result<TranscriptionResult, String> {
-    transcribe(state, session_id, model_id, language).await
+    transcribe(
+        app,
+        recording_state,
+        stt_manager,
+        session_id,
+        model_id,
+        language,
+    )
+    .await
 }

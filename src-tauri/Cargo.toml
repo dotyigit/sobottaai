@@ -31,6 +31,9 @@ tauri-plugin-shell = "2"
 cpal = "0.15"
 hound = "3.5"
 
+# Speech-to-text
+whisper-rs = "0.15"
+
 # Keyboard simulation for auto-paste
 enigo = "0.3"
 
