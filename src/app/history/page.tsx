@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowLeft, Search, Trash2, Clock, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +40,7 @@ export default function HistoryPage() {
       });
       setItems(result);
     } catch (err) {
-      console.error("Failed to load history:", err);
+      toast.error("Failed to load history");
     } finally {
       setLoading(false);
     }
@@ -57,7 +58,7 @@ export default function HistoryPage() {
       });
       setItems(result);
     } catch (err) {
-      console.error("Failed to search history:", err);
+      toast.error("Failed to search history");
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function HistoryPage() {
       await tauriInvoke("delete_history_item", { id });
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
-      console.error("Failed to delete history item:", err);
+      toast.error("Failed to delete item");
     }
   }, []);
 

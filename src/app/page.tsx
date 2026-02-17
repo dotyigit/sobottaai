@@ -8,11 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModelSelector } from "@/components/model-selector";
 import { LanguageSelector } from "@/components/language-selector";
 import { AiFunctionPicker } from "@/components/ai-function-picker";
+import { Onboarding } from "@/components/onboarding";
 import { useRecording } from "@/hooks/use-recording";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export default function Home() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const { onboardingComplete, setOnboardingComplete, _hydrated } = useSettingsStore();
   const {
     isRecording,
     isTranscribing,
@@ -49,6 +52,15 @@ export default function Home() {
   const seconds = Math.floor(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
+
+  // Show onboarding on first launch
+  if (_hydrated && !onboardingComplete) {
+    return (
+      <Onboarding
+        onComplete={() => setOnboardingComplete(true)}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col">

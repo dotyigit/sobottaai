@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export default function AiFunctionsSettings() {
       const data = await invoke<AiFunction[]>("list_ai_functions");
       setFunctions(data);
     } catch (err) {
-      console.error("Failed to load AI functions:", err);
+      toast.error("Failed to load AI functions");
     } finally {
       setLoading(false);
     }
@@ -63,7 +64,7 @@ export default function AiFunctionsSettings() {
       setShowCreate(false);
       await loadFunctions();
     } catch (err) {
-      console.error("Failed to save AI function:", err);
+      toast.error("Failed to save AI function");
     }
   }
 
@@ -72,7 +73,7 @@ export default function AiFunctionsSettings() {
       await invoke("delete_ai_function", { functionId: id });
       setFunctions((prev) => prev.filter((f) => f.id !== id));
     } catch (err) {
-      console.error("Failed to delete AI function:", err);
+      toast.error("Failed to delete AI function");
     }
   }
 

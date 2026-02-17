@@ -12,6 +12,7 @@ async function tauriListen<T>(
     return undefined;
   }
 }
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -76,9 +77,10 @@ export default function ModelSettings() {
     setProgress(null);
     try {
       await commands.downloadModel(modelId);
+      toast.success("Model downloaded successfully");
       await loadModels();
     } catch (err) {
-      console.error("Download failed:", err);
+      toast.error("Download failed", { description: String(err) });
     } finally {
       setDownloading(null);
       setProgress(null);
@@ -88,9 +90,10 @@ export default function ModelSettings() {
   async function handleDelete(modelId: string) {
     try {
       await commands.deleteModel(modelId);
+      toast.success("Model deleted");
       await loadModels();
     } catch (err) {
-      console.error("Delete failed:", err);
+      toast.error("Failed to delete model", { description: String(err) });
     }
   }
 

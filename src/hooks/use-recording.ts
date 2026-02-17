@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useRecordingStore } from "@/stores/recording-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -163,6 +164,7 @@ export function useRecording() {
             finalText = processedText;
           } catch (err) {
             console.error("AI function failed:", err);
+            toast.error("AI function failed", { description: String(err) });
           }
         }
 
@@ -182,10 +184,12 @@ export function useRecording() {
           durationMs: recordingDurationMs ?? result.durationMs,
         }).catch((err: unknown) => {
           console.error("Failed to save history:", err);
+          toast.error("Failed to save to history", { description: String(err) });
         });
       } catch (err) {
         console.error("Transcription failed:", err);
-        setLastResult(`[Error: ${err}]`);
+        toast.error("Transcription failed", { description: String(err) });
+        setLastResult(null);
       } finally {
         transcribingRef.current = false;
         setIsTranscribing(false);
@@ -204,6 +208,7 @@ export function useRecording() {
       // This prevents double-setting when both the command return and event fire.
     } catch (err) {
       console.error("Failed to start recording:", err);
+      toast.error("Failed to start recording", { description: String(err) });
       reset();
     }
   }, [isRecording, reset]);
@@ -217,6 +222,7 @@ export function useRecording() {
       // The "recording-stopped" event handler will trigger it exactly once.
     } catch (err) {
       console.error("Failed to stop recording:", err);
+      toast.error("Failed to stop recording", { description: String(err) });
       reset();
     }
   }, [isRecording, reset]);

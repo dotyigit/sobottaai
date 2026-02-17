@@ -23,7 +23,9 @@ interface SettingsState {
   launchAtLogin: boolean;
   llmProvider: string;
   providerConfigs: Record<string, ProviderConfig>;
+  onboardingComplete: boolean;
   _hydrated: boolean;
+  setOnboardingComplete: (value: boolean) => void;
   setSelectedModel: (model: string) => void;
   setSelectedLanguage: (lang: string) => void;
   setSelectedAiFunction: (fn: string | null) => void;
@@ -104,6 +106,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   launchAtLogin: false,
   llmProvider: "openai",
   providerConfigs: { ...DEFAULT_PROVIDER_CONFIGS },
+  onboardingComplete: false,
   _hydrated: false,
 
   get llmApiKey() {
@@ -116,6 +119,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     return state.providerConfigs[state.llmProvider]?.model ?? "";
   },
 
+  setOnboardingComplete: (value) => {
+    set({ onboardingComplete: value });
+    persistSettings(get());
+  },
   setSelectedModel: (model) => {
     set({ selectedModel: model });
     persistSettings(get());
@@ -208,6 +215,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           launchAtLogin: (data.launchAtLogin as boolean) ?? false,
           llmProvider: (data.llmProvider as string) ?? "openai",
           providerConfigs: { ...DEFAULT_PROVIDER_CONFIGS, ...providerConfigs },
+          onboardingComplete: (data.onboardingComplete as boolean) ?? false,
           _hydrated: true,
         });
       } else {

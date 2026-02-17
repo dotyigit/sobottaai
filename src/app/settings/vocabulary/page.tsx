@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { Plus, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ export default function VocabularySettings() {
       const data = await invoke<VocabularyTerm[]>("get_vocabulary");
       setTerms(data);
     } catch (err) {
-      console.error("Failed to load vocabulary:", err);
+      toast.error("Failed to load vocabulary");
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export default function VocabularySettings() {
       setNewTerm("");
       await loadTerms();
     } catch (err) {
-      console.error("Failed to add term:", err);
+      toast.error("Failed to add term");
     }
   }
 
@@ -55,7 +56,7 @@ export default function VocabularySettings() {
       await invoke("delete_term", { id });
       setTerms((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
-      console.error("Failed to delete term:", err);
+      toast.error("Failed to delete term");
     }
   }
 
