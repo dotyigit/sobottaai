@@ -23,7 +23,7 @@ impl SttManager {
         }
     }
 
-    /// Get or load a Whisper engine for the given model.
+    /// Get or load a local STT engine for the given model.
     fn get_or_load(
         &self,
         model_id: &str,
@@ -60,6 +60,9 @@ impl SttManager {
                     "Parakeet engine not yet implemented. Please use a Whisper model.".into(),
                 );
             }
+            models::Engine::CloudOpenAI | models::Engine::CloudGroq => {
+                return Err("Cloud models should not be loaded as local engines".into());
+            }
         };
 
         engines.insert(model_id.to_string(), engine.clone());
@@ -73,6 +76,14 @@ impl SttManager {
     }
 }
 
+/// Determine the engine type for a model ID.
+fn engine_for_model(model_id: &str) -> Option<models::Engine> {
+    models::full_catalog()
+        .into_iter()
+        .find(|m| m.id == model_id)
+        .map(|m| m.engine)
+}
+
 #[tauri::command]
 pub async fn transcribe(
     app: AppHandle,
@@ -81,6 +92,9 @@ pub async fn transcribe(
     session_id: String,
     model_id: String,
     language: Option<String>,
+    // Cloud STT needs API key from frontend
+    api_key: Option<String>,
+    cloud_model: Option<String>,
 ) -> Result<TranscriptionResult, String> {
     let audio = recording::get_session_audio(&recording_state, &session_id)
         .ok_or("Session not found")?;
@@ -88,10 +102,6 @@ pub async fn transcribe(
     if audio.is_empty() {
         return Err("No audio data in session".into());
     }
-
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-
-    let engine = stt_manager.get_or_load(&model_id, &app_data_dir)?;
 
     // Load vocabulary terms from database to improve transcription accuracy
     let vocabulary = crate::db::vocabulary::get_terms().unwrap_or_default();
@@ -101,22 +111,44 @@ pub async fn transcribe(
         vocabulary,
     };
 
-    log::info!("Starting transcription: {} samples, model={}", audio.len(), model_id);
+    log::info!(
+        "Starting transcription: {} samples, model={}",
+        audio.len(),
+        model_id
+    );
 
-    // Clone the lock Arc to send into blocking thread
-    let transcription_lock = stt_manager.transcription_lock.clone();
+    let engine_type = engine_for_model(&model_id)
+        .ok_or_else(|| format!("Unknown model: {}", model_id))?;
 
-    // Run transcription on a blocking thread (whisper inference is CPU-intensive)
-    // The lock serializes access so only one Whisper call runs at a time
-    let result = tokio::task::spawn_blocking(move || {
-        let _guard = transcription_lock.lock().unwrap();
-        engine.transcribe(&audio, &options)
-    })
-    .await
-    .map_err(|e| format!("Transcription task failed: {}", e))?
-    .map_err(|e| format!("Transcription failed: {}", e))?;
+    match engine_type {
+        models::Engine::CloudOpenAI => {
+            let key = api_key.ok_or("API key required for cloud OpenAI transcription")?;
+            crate::stt::cloud_openai::transcribe(&audio, &options, &key)
+                .await
+                .map_err(|e| format!("Cloud OpenAI transcription failed: {}", e))
+        }
+        models::Engine::CloudGroq => {
+            let key = api_key.ok_or("API key required for cloud Groq transcription")?;
+            let model = cloud_model.as_deref().unwrap_or("whisper-large-v3-turbo");
+            crate::stt::cloud_groq::transcribe(&audio, &options, &key, model)
+                .await
+                .map_err(|e| format!("Cloud Groq transcription failed: {}", e))
+        }
+        _ => {
+            // Local model (Whisper or Parakeet)
+            let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let engine = stt_manager.get_or_load(&model_id, &app_data_dir)?;
+            let transcription_lock = stt_manager.transcription_lock.clone();
 
-    Ok(result)
+            tokio::task::spawn_blocking(move || {
+                let _guard = transcription_lock.lock().unwrap();
+                engine.transcribe(&audio, &options)
+            })
+            .await
+            .map_err(|e| format!("Transcription task failed: {}", e))?
+            .map_err(|e| format!("Transcription failed: {}", e))
+        }
+    }
 }
 
 #[tauri::command]
@@ -127,6 +159,8 @@ pub async fn transcribe_file(
     session_id: String,
     model_id: String,
     language: Option<String>,
+    api_key: Option<String>,
+    cloud_model: Option<String>,
 ) -> Result<TranscriptionResult, String> {
     transcribe(
         app,
@@ -135,6 +169,8 @@ pub async fn transcribe_file(
         session_id,
         model_id,
         language,
+        api_key,
+        cloud_model,
     )
     .await
 }

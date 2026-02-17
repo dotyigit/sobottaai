@@ -101,10 +101,24 @@ export default function ModelSettings() {
   }
 
   function getEngineLabel(engine: string): string {
-    if (typeof engine === "string") return engine;
+    if (typeof engine === "string") {
+      if (engine === "CloudOpenAI") return "Cloud (OpenAI)";
+      if (engine === "CloudGroq") return "Cloud (Groq)";
+      return engine;
+    }
     if ("Whisper" in (engine as Record<string, unknown>)) return "Whisper";
     if ("Parakeet" in (engine as Record<string, unknown>)) return "Parakeet";
+    if ("CloudOpenAI" in (engine as Record<string, unknown>)) return "Cloud (OpenAI)";
+    if ("CloudGroq" in (engine as Record<string, unknown>)) return "Cloud (Groq)";
     return "Unknown";
+  }
+
+  function isCloudModel(engine: string): boolean {
+    if (typeof engine === "string") {
+      return engine === "CloudOpenAI" || engine === "CloudGroq";
+    }
+    const obj = engine as Record<string, unknown>;
+    return "CloudOpenAI" in obj || "CloudGroq" in obj;
   }
 
   return (
@@ -134,9 +148,11 @@ export default function ModelSettings() {
                     <Badge variant="outline">
                       {getEngineLabel(model.engine)}
                     </Badge>
-                    <Badge variant="outline">
-                      {formatSize(model.sizeBytes)}
-                    </Badge>
+                    {!isCloudModel(model.engine) && (
+                      <Badge variant="outline">
+                        {formatSize(model.sizeBytes)}
+                      </Badge>
+                    )}
                     {model.downloaded && (
                       <Badge variant="secondary">Downloaded</Badge>
                     )}
@@ -146,7 +162,9 @@ export default function ModelSettings() {
                   </p>
                 </div>
                 <div>
-                  {isDownloading ? (
+                  {isCloudModel(model.engine) ? (
+                    <Badge variant="secondary">API Key</Badge>
+                  ) : isDownloading ? (
                     <Button variant="outline" size="sm" disabled>
                       <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                       Downloading

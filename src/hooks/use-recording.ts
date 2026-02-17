@@ -114,10 +114,22 @@ export function useRecording() {
           .map((r) => r.id);
 
         // Step 1: Transcribe
+        // For cloud models, pass the relevant provider API key
+        let transcribeApiKey: string | null = null;
+        let transcribeCloudModel: string | null = null;
+        if (modelId === "cloud-openai-whisper") {
+          transcribeApiKey = providerConfigsRef.current["openai"]?.apiKey ?? null;
+        } else if (modelId === "cloud-groq-whisper") {
+          transcribeApiKey = providerConfigsRef.current["groq"]?.apiKey ?? null;
+          transcribeCloudModel = providerConfigsRef.current["groq"]?.model ?? null;
+        }
+
         const result = await tauriInvoke<TranscriptionResult>("transcribe", {
           sessionId: sid,
           modelId,
           language: lang === "auto" ? null : lang,
+          apiKey: transcribeApiKey,
+          cloudModel: transcribeCloudModel,
         });
 
         if (!result.text.trim()) {
