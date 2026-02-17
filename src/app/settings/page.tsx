@@ -12,7 +12,8 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 
 export default function GeneralSettings() {
-  const { theme, setTheme, launchAtLogin, setLaunchAtLogin } = useSettingsStore();
+  const { theme, setTheme, launchAtLogin, setLaunchAtLogin } =
+    useSettingsStore();
 
   return (
     <div className="space-y-6">
@@ -24,12 +25,19 @@ export default function GeneralSettings() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-lg border p-4">
           <div>
             <Label>Theme</Label>
-            <p className="text-sm text-muted-foreground">Choose your preferred theme</p>
+            <p className="text-sm text-muted-foreground">
+              Choose your preferred appearance
+            </p>
           </div>
-          <Select value={theme} onValueChange={(v) => setTheme(v as "light" | "dark" | "system")}>
+          <Select
+            value={theme}
+            onValueChange={(v) =>
+              setTheme(v as "light" | "dark" | "system")
+            }
+          >
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
@@ -41,10 +49,12 @@ export default function GeneralSettings() {
           </Select>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-lg border p-4">
           <div>
             <Label>Launch at Login</Label>
-            <p className="text-sm text-muted-foreground">Start SobottaAI when you log in</p>
+            <p className="text-sm text-muted-foreground">
+              Automatically start SobottaAI when you log in
+            </p>
           </div>
           <Switch checked={launchAtLogin} onCheckedChange={setLaunchAtLogin} />
         </div>

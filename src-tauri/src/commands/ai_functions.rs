@@ -97,8 +97,9 @@ pub async fn execute_ai_function(
     llm_api_key: String,
     llm_model: String,
 ) -> Result<String, String> {
-    let functions = builtin_functions();
-    let func = functions
+    // Search built-in functions first, then custom ones from DB
+    let all_functions = list_ai_functions()?;
+    let func = all_functions
         .iter()
         .find(|f| f.id == function_id)
         .ok_or("AI function not found")?;

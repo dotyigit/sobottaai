@@ -6,6 +6,12 @@ interface Rule {
   enabled: boolean;
 }
 
+interface ProviderConfig {
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+}
+
 interface SettingsState {
   selectedModel: string;
   selectedLanguage: string;
@@ -16,8 +22,7 @@ interface SettingsState {
   theme: "light" | "dark" | "system";
   launchAtLogin: boolean;
   llmProvider: string;
-  llmApiKey: string;
-  llmModel: string;
+  providerConfigs: Record<string, ProviderConfig>;
   _hydrated: boolean;
   setSelectedModel: (model: string) => void;
   setSelectedLanguage: (lang: string) => void;
@@ -26,30 +31,59 @@ interface SettingsState {
   toggleRule: (ruleId: string) => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
   setLaunchAtLogin: (value: boolean) => void;
+  setDefaultHotkey: (hotkey: string) => void;
   setLlmProvider: (provider: string) => void;
-  setLlmApiKey: (key: string) => void;
-  setLlmModel: (model: string) => void;
+  setProviderConfig: (provider: string, config: Partial<ProviderConfig>) => void;
+  // Convenience getters for the active provider
+  get llmApiKey(): string;
+  get llmModel(): string;
   hydrate: () => Promise<void>;
 }
 
+const DEFAULT_PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
+  openai: { apiKey: "", model: "gpt-4o-mini" },
+  anthropic: { apiKey: "", model: "claude-sonnet-4-5-20250929" },
+  groq: { apiKey: "", model: "llama-3.3-70b-versatile" },
+  ollama: { apiKey: "", model: "llama3.2", baseUrl: "http://localhost:11434" },
+};
+
 const STORE_KEY = "settings";
 
-// Persist to tauri-plugin-store
 async function persistSettings(state: Partial<SettingsState>) {
   try {
     const { load } = await import("@tauri-apps/plugin-store");
     const store = await load("settings.json");
-    // Only save serializable fields
-    const { _hydrated, ...rest } = state as Record<string, unknown>;
-    // Filter out functions
     const data: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rest)) {
-      if (typeof value !== "function") {
+    for (const [key, value] of Object.entries(state)) {
+      if (typeof value !== "function" && key !== "_hydrated") {
         data[key] = value;
       }
     }
     await store.set(STORE_KEY, data);
     await store.save();
+  } catch {
+    // Outside Tauri context
+  }
+}
+
+async function setAutostart(enabled: boolean) {
+  try {
+    if (enabled) {
+      const { enable } = await import("@tauri-apps/plugin-autostart");
+      await enable();
+    } else {
+      const { disable } = await import("@tauri-apps/plugin-autostart");
+      await disable();
+    }
+  } catch {
+    // Outside Tauri context
+  }
+}
+
+async function updateHotkeyBackend(hotkey: string) {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("update_hotkey", { hotkey });
   } catch {
     // Outside Tauri context
   }
@@ -69,9 +103,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   theme: "system",
   launchAtLogin: false,
   llmProvider: "openai",
-  llmApiKey: "",
-  llmModel: "gpt-4o-mini",
+  providerConfigs: { ...DEFAULT_PROVIDER_CONFIGS },
   _hydrated: false,
+
+  get llmApiKey() {
+    const state = get();
+    return state.providerConfigs[state.llmProvider]?.apiKey ?? "";
+  },
+
+  get llmModel() {
+    const state = get();
+    return state.providerConfigs[state.llmProvider]?.model ?? "";
+  },
 
   setSelectedModel: (model) => {
     set({ selectedModel: model });
@@ -103,18 +146,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setLaunchAtLogin: (value) => {
     set({ launchAtLogin: value });
+    setAutostart(value);
+    persistSettings(get());
+  },
+  setDefaultHotkey: (hotkey) => {
+    set({ defaultHotkey: hotkey });
+    updateHotkeyBackend(hotkey);
     persistSettings(get());
   },
   setLlmProvider: (provider) => {
     set({ llmProvider: provider });
     persistSettings(get());
   },
-  setLlmApiKey: (key) => {
-    set({ llmApiKey: key });
-    persistSettings(get());
-  },
-  setLlmModel: (model) => {
-    set({ llmModel: model });
+  setProviderConfig: (provider, config) => {
+    set((state) => ({
+      providerConfigs: {
+        ...state.providerConfigs,
+        [provider]: {
+          ...state.providerConfigs[provider],
+          ...config,
+        },
+      },
+    }));
     persistSettings(get());
   },
 
@@ -124,6 +177,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const store = await load("settings.json");
       const data = await store.get<Record<string, unknown>>(STORE_KEY);
       if (data) {
+        // Migrate old single-key format to per-provider configs
+        let providerConfigs = data.providerConfigs as Record<string, ProviderConfig> | undefined;
+        if (!providerConfigs) {
+          providerConfigs = { ...DEFAULT_PROVIDER_CONFIGS };
+          // Migrate old llmApiKey/llmModel if present
+          const oldProvider = (data.llmProvider as string) ?? "openai";
+          const oldKey = (data.llmApiKey as string) ?? "";
+          const oldModel = (data.llmModel as string) ?? "";
+          if (oldKey && providerConfigs[oldProvider]) {
+            providerConfigs[oldProvider].apiKey = oldKey;
+          }
+          if (oldModel && providerConfigs[oldProvider]) {
+            providerConfigs[oldProvider].model = oldModel;
+          }
+        }
+
         set({
           selectedModel: (data.selectedModel as string) ?? "whisper-base",
           selectedLanguage: (data.selectedLanguage as string) ?? "auto",
@@ -134,11 +203,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             { id: "smart-punctuation", name: "Smart Punctuation", enabled: false },
             { id: "fix-grammar", name: "Fix Grammar", enabled: false },
           ],
+          defaultHotkey: (data.defaultHotkey as string) ?? "CommandOrControl+Shift+Space",
           theme: (data.theme as "light" | "dark" | "system") ?? "system",
           launchAtLogin: (data.launchAtLogin as boolean) ?? false,
           llmProvider: (data.llmProvider as string) ?? "openai",
-          llmApiKey: (data.llmApiKey as string) ?? "",
-          llmModel: (data.llmModel as string) ?? "gpt-4o-mini",
+          providerConfigs: { ...DEFAULT_PROVIDER_CONFIGS, ...providerConfigs },
           _hydrated: true,
         });
       } else {

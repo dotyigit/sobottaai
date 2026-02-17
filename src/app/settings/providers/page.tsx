@@ -2,6 +2,7 @@
 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -11,61 +12,132 @@ import {
 } from "@/components/ui/select";
 import { useSettingsStore } from "@/stores/settings-store";
 
+const PROVIDERS = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    placeholder: "sk-...",
+    defaultModel: "gpt-4o-mini",
+    needsKey: true,
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    placeholder: "sk-ant-...",
+    defaultModel: "claude-sonnet-4-5-20250929",
+    needsKey: true,
+  },
+  {
+    id: "groq",
+    name: "Groq",
+    placeholder: "gsk_...",
+    defaultModel: "llama-3.3-70b-versatile",
+    needsKey: true,
+  },
+  {
+    id: "ollama",
+    name: "Ollama (Local)",
+    placeholder: "Not required",
+    defaultModel: "llama3.2",
+    needsKey: false,
+  },
+];
+
 export default function ProviderSettings() {
-  const {
-    llmProvider,
-    setLlmProvider,
-    llmApiKey,
-    setLlmApiKey,
-    llmModel,
-    setLlmModel,
-  } = useSettingsStore();
+  const { llmProvider, setLlmProvider, providerConfigs, setProviderConfig } =
+    useSettingsStore();
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold">API Keys</h3>
         <p className="text-sm text-muted-foreground">
-          Configure API keys for LLM providers. Keys are stored locally and never shared.
-          All providers are optional.
+          Configure API keys for LLM providers used by AI Functions and grammar
+          correction. Keys are stored locally and never shared.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Default Provider</Label>
+        <Select value={llmProvider} onValueChange={setLlmProvider}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PROVIDERS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Used for AI Functions and grammar correction rules.
         </p>
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>Default LLM Provider</Label>
-          <Select value={llmProvider} onValueChange={setLlmProvider}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="openai">OpenAI</SelectItem>
-              <SelectItem value="anthropic">Anthropic</SelectItem>
-              <SelectItem value="groq">Groq</SelectItem>
-              <SelectItem value="ollama">Ollama (Local)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {PROVIDERS.map((provider) => {
+          const config = providerConfigs[provider.id] ?? {
+            apiKey: "",
+            model: provider.defaultModel,
+          };
+          const isActive = llmProvider === provider.id;
 
-        <div className="space-y-2">
-          <Label>API Key</Label>
-          <Input
-            type="password"
-            placeholder={llmProvider === "ollama" ? "Not required for Ollama" : "Enter API key..."}
-            value={llmApiKey}
-            onChange={(e) => setLlmApiKey(e.target.value)}
-            disabled={llmProvider === "ollama"}
-          />
-        </div>
+          return (
+            <div
+              key={provider.id}
+              className={`rounded-lg border p-4 space-y-3 ${
+                isActive ? "border-primary/50 bg-primary/5" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{provider.name}</span>
+                {isActive && <Badge>Active</Badge>}
+              </div>
 
-        <div className="space-y-2">
-          <Label>Model</Label>
-          <Input
-            placeholder="e.g., gpt-4o-mini"
-            value={llmModel}
-            onChange={(e) => setLlmModel(e.target.value)}
-          />
-        </div>
+              {provider.needsKey && (
+                <div className="space-y-1">
+                  <Label className="text-xs">API Key</Label>
+                  <Input
+                    type="password"
+                    placeholder={provider.placeholder}
+                    value={config.apiKey}
+                    onChange={(e) =>
+                      setProviderConfig(provider.id, { apiKey: e.target.value })
+                    }
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs">Model</Label>
+                <Input
+                  placeholder={provider.defaultModel}
+                  value={config.model}
+                  onChange={(e) =>
+                    setProviderConfig(provider.id, { model: e.target.value })
+                  }
+                />
+              </div>
+
+              {provider.id === "ollama" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Base URL</Label>
+                  <Input
+                    placeholder="http://localhost:11434"
+                    value={config.baseUrl ?? ""}
+                    onChange={(e) =>
+                      setProviderConfig(provider.id, {
+                        baseUrl: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

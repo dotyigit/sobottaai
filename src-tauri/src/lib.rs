@@ -79,6 +79,7 @@ pub fn run() {
             // Settings
             commands::settings::get_settings,
             commands::settings::save_settings,
+            commands::settings::update_hotkey,
             // Vocabulary
             commands::vocabulary::get_vocabulary,
             commands::vocabulary::add_term,

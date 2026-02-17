@@ -62,8 +62,7 @@ export function useRecording() {
     selectedAiFunction,
     rules,
     llmProvider,
-    llmApiKey,
-    llmModel,
+    providerConfigs,
   } = useSettingsStore();
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,16 +75,14 @@ export function useRecording() {
   const selectedAiFunctionRef = useRef(selectedAiFunction);
   const rulesRef = useRef(rules);
   const llmProviderRef = useRef(llmProvider);
-  const llmApiKeyRef = useRef(llmApiKey);
-  const llmModelRef = useRef(llmModel);
+  const providerConfigsRef = useRef(providerConfigs);
 
   useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
   useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
   useEffect(() => { selectedAiFunctionRef.current = selectedAiFunction; }, [selectedAiFunction]);
   useEffect(() => { rulesRef.current = rules; }, [rules]);
   useEffect(() => { llmProviderRef.current = llmProvider; }, [llmProvider]);
-  useEffect(() => { llmApiKeyRef.current = llmApiKey; }, [llmApiKey]);
-  useEffect(() => { llmModelRef.current = llmModel; }, [llmModel]);
+  useEffect(() => { providerConfigsRef.current = providerConfigs; }, [providerConfigs]);
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -140,14 +137,16 @@ export function useRecording() {
 
         // Step 3: Apply AI function (if selected and API key configured)
         let processedText: string | null = null;
-        if (aiFunctionId && llmApiKeyRef.current) {
+        const activeProvider = llmProviderRef.current;
+        const activeConfig = providerConfigsRef.current[activeProvider];
+        if (aiFunctionId && (activeConfig?.apiKey || activeProvider === "ollama")) {
           try {
             processedText = await tauriInvoke<string>("execute_ai_function", {
               text: finalText,
               functionId: aiFunctionId,
-              llmProvider: llmProviderRef.current,
-              llmApiKey: llmApiKeyRef.current,
-              llmModel: llmModelRef.current,
+              llmProvider: activeProvider,
+              llmApiKey: activeConfig?.apiKey ?? "",
+              llmModel: activeConfig?.model ?? "",
             });
             finalText = processedText;
           } catch (err) {

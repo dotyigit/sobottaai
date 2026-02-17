@@ -93,9 +93,12 @@ pub async fn transcribe(
 
     let engine = stt_manager.get_or_load(&model_id, &app_data_dir)?;
 
+    // Load vocabulary terms from database to improve transcription accuracy
+    let vocabulary = crate::db::vocabulary::get_terms().unwrap_or_default();
+
     let options = TranscriptionOptions {
         language,
-        vocabulary: vec![],
+        vocabulary,
     };
 
     log::info!("Starting transcription: {} samples, model={}", audio.len(), model_id);

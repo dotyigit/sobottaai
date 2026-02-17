@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -9,17 +10,31 @@ import {
 } from "@/components/ui/select";
 import { useSettingsStore } from "@/stores/settings-store";
 
-const AI_FUNCTIONS = [
-  { id: "none", name: "None" },
-  { id: "email", name: "Professional Email" },
-  { id: "code-prompt", name: "Code Prompt" },
-  { id: "summarize", name: "Summarize" },
-  { id: "casual", name: "Casual Rewrite" },
-  { id: "translate", name: "Translate to English" },
-];
+interface AiFunction {
+  id: string;
+  name: string;
+  isBuiltin: boolean;
+}
 
 export function AiFunctionPicker() {
   const { selectedAiFunction, setSelectedAiFunction } = useSettingsStore();
+  const [functions, setFunctions] = useState<AiFunction[]>([]);
+
+  useEffect(() => {
+    import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke<AiFunction[]>("list_ai_functions"))
+      .then(setFunctions)
+      .catch(() => {
+        // Fallback to built-in list outside Tauri
+        setFunctions([
+          { id: "email", name: "Professional Email", isBuiltin: true },
+          { id: "code-prompt", name: "Code Prompt", isBuiltin: true },
+          { id: "summarize", name: "Summarize", isBuiltin: true },
+          { id: "casual", name: "Casual Rewrite", isBuiltin: true },
+          { id: "translate", name: "Translate to English", isBuiltin: true },
+        ]);
+      });
+  }, []);
 
   return (
     <Select
@@ -30,7 +45,8 @@ export function AiFunctionPicker() {
         <SelectValue placeholder="Select function" />
       </SelectTrigger>
       <SelectContent>
-        {AI_FUNCTIONS.map((fn) => (
+        <SelectItem value="none">None</SelectItem>
+        {functions.map((fn) => (
           <SelectItem key={fn.id} value={fn.id}>
             {fn.name}
           </SelectItem>
