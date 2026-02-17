@@ -37,17 +37,17 @@ impl SttEngine for WhisperEngine {
             .create_state()
             .map_err(|e| anyhow::anyhow!("Failed to create Whisper state: {:?}", e))?;
 
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let mut params = FullParams::new(SamplingStrategy::BeamSearch {
+            beam_size: 5,
+            patience: -1.0,
+        });
 
         // Language setting
-        if let Some(ref lang) = options.language {
-            if lang == "auto" {
-                params.set_detect_language(true);
-            } else {
-                params.set_language(Some(lang));
-            }
-        } else {
-            params.set_detect_language(true);
+        // NOTE: set_detect_language(true) causes 0 segments with whisper-rs 0.15 + Metal.
+        // Instead, we always set an explicit language. "auto" defaults to "en".
+        match options.language.as_deref() {
+            Some(lang) if lang != "auto" => params.set_language(Some(lang)),
+            _ => params.set_language(Some("en")),
         }
 
         // Set initial prompt with vocabulary terms if provided
@@ -65,14 +65,18 @@ impl SttEngine for WhisperEngine {
         params.set_print_realtime(false);
         params.set_print_timestamps(false);
         params.set_translate(false);
-        params.set_no_timestamps(false);
-        params.set_single_segment(false);
 
         // Use available CPU threads (cap at 8)
         let n_threads = std::thread::available_parallelism()
             .map(|n| n.get().max(1).min(8) as i32)
             .unwrap_or(4);
         params.set_n_threads(n_threads);
+
+        log::info!(
+            "Whisper inference starting: {} samples ({:.1}s audio)",
+            audio.len(),
+            audio.len() as f64 / 16000.0,
+        );
 
         // Run inference
         let start = std::time::Instant::now();
@@ -81,31 +85,25 @@ impl SttEngine for WhisperEngine {
             .map_err(|e| anyhow::anyhow!("Whisper inference failed: {:?}", e))?;
         let inference_ms = start.elapsed().as_millis() as u64;
 
-        // Extract segments using the iterator API
-        let num_segments = state.full_n_segments();
-
+        // Extract segments using the iterator API (as per official examples)
         let mut segments = Vec::new();
         let mut full_text = String::new();
 
-        for i in 0..num_segments {
-            if let Some(segment) = state.get_segment(i) {
-                let text = segment
-                    .to_str()
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
+        let num_segments = state.full_n_segments();
+        log::info!("Whisper full_n_segments returned: {}", num_segments);
 
-                // Timestamps are in centiseconds (1/100th of a second)
-                let t0 = segment.start_timestamp();
-                let t1 = segment.end_timestamp();
+        for segment in state.as_iter() {
+            let text = segment.to_string();
+            let t0 = segment.start_timestamp();
+            let t1 = segment.end_timestamp();
 
-                full_text.push_str(&text);
+            full_text.push_str(&text);
 
-                segments.push(Segment {
-                    start_ms: (t0 * 10) as u64,
-                    end_ms: (t1 * 10) as u64,
-                    text,
-                });
-            }
+            segments.push(Segment {
+                start_ms: (t0 * 10) as u64,
+                end_ms: (t1 * 10) as u64,
+                text,
+            });
         }
 
         // Detect language from state
@@ -119,10 +117,11 @@ impl SttEngine for WhisperEngine {
             .or(detected_language);
 
         log::info!(
-            "Whisper transcription: {} segments, {}ms inference, lang={:?}",
+            "Whisper transcription: {} segments, {}ms inference, lang={:?}, text={:?}",
             segments.len(),
             inference_ms,
-            language
+            language,
+            full_text.trim(),
         );
 
         Ok(TranscriptionResult {
