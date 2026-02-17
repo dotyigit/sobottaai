@@ -8,14 +8,18 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
 /// Manages loaded STT engine instances (cached to avoid re-loading models).
+/// Also serializes transcription calls to prevent concurrent Whisper inference.
 pub struct SttManager {
     engines: Mutex<HashMap<String, Arc<dyn SttEngine>>>,
+    /// Serializes transcription to prevent multiple concurrent Whisper calls
+    transcription_lock: Arc<Mutex<()>>,
 }
 
 impl SttManager {
     pub fn new() -> Self {
         Self {
             engines: Mutex::new(HashMap::new()),
+            transcription_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -94,11 +98,20 @@ pub async fn transcribe(
         vocabulary: vec![],
     };
 
+    log::info!("Starting transcription: {} samples, model={}", audio.len(), model_id);
+
+    // Clone the lock Arc to send into blocking thread
+    let transcription_lock = stt_manager.transcription_lock.clone();
+
     // Run transcription on a blocking thread (whisper inference is CPU-intensive)
-    let result = tokio::task::spawn_blocking(move || engine.transcribe(&audio, &options))
-        .await
-        .map_err(|e| format!("Transcription task failed: {}", e))?
-        .map_err(|e| format!("Transcription failed: {}", e))?;
+    // The lock serializes access so only one Whisper call runs at a time
+    let result = tokio::task::spawn_blocking(move || {
+        let _guard = transcription_lock.lock().unwrap();
+        engine.transcribe(&audio, &options)
+    })
+    .await
+    .map_err(|e| format!("Transcription task failed: {}", e))?
+    .map_err(|e| format!("Transcription failed: {}", e))?;
 
     Ok(result)
 }

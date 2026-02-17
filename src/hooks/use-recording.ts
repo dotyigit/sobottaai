@@ -35,7 +35,10 @@ interface TranscriptionResult {
 
 /**
  * Hook that orchestrates the full recording pipeline:
- * hotkey/click → record → stop → transcribe → paste
+ * hotkey/click → record → stop → transcribe → rules → AI → paste → save
+ *
+ * IMPORTANT: Only the "recording-stopped" event triggers transcription.
+ * This prevents duplicate transcription when button click + event both fire.
  */
 export function useRecording() {
   const {
@@ -65,6 +68,8 @@ export function useRecording() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  // Guard to prevent concurrent transcription
+  const transcribingRef = useRef(false);
 
   const selectedModelRef = useRef(selectedModel);
   const selectedLanguageRef = useRef(selectedLanguage);
@@ -73,27 +78,14 @@ export function useRecording() {
   const llmProviderRef = useRef(llmProvider);
   const llmApiKeyRef = useRef(llmApiKey);
   const llmModelRef = useRef(llmModel);
-  useEffect(() => {
-    selectedModelRef.current = selectedModel;
-  }, [selectedModel]);
-  useEffect(() => {
-    selectedLanguageRef.current = selectedLanguage;
-  }, [selectedLanguage]);
-  useEffect(() => {
-    selectedAiFunctionRef.current = selectedAiFunction;
-  }, [selectedAiFunction]);
-  useEffect(() => {
-    rulesRef.current = rules;
-  }, [rules]);
-  useEffect(() => {
-    llmProviderRef.current = llmProvider;
-  }, [llmProvider]);
-  useEffect(() => {
-    llmApiKeyRef.current = llmApiKey;
-  }, [llmApiKey]);
-  useEffect(() => {
-    llmModelRef.current = llmModel;
-  }, [llmModel]);
+
+  useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
+  useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
+  useEffect(() => { selectedAiFunctionRef.current = selectedAiFunction; }, [selectedAiFunction]);
+  useEffect(() => { rulesRef.current = rules; }, [rules]);
+  useEffect(() => { llmProviderRef.current = llmProvider; }, [llmProvider]);
+  useEffect(() => { llmApiKeyRef.current = llmApiKey; }, [llmApiKey]);
+  useEffect(() => { llmModelRef.current = llmModel; }, [llmModel]);
 
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -112,6 +104,9 @@ export function useRecording() {
   // Transcribe → apply rules → AI function → paste → save history
   const transcribeAndPaste = useCallback(
     async (sid: string, recordingDurationMs?: number) => {
+      // Guard: only one transcription at a time
+      if (transcribingRef.current) return;
+      transcribingRef.current = true;
       setIsTranscribing(true);
       try {
         const lang = selectedLanguageRef.current;
@@ -157,7 +152,6 @@ export function useRecording() {
             finalText = processedText;
           } catch (err) {
             console.error("AI function failed:", err);
-            // Continue with un-processed text
           }
         }
 
@@ -182,6 +176,7 @@ export function useRecording() {
         console.error("Transcription failed:", err);
         setLastResult(`[Error: ${err}]`);
       } finally {
+        transcribingRef.current = false;
         setIsTranscribing(false);
       }
     },
@@ -194,41 +189,26 @@ export function useRecording() {
     try {
       reset();
       await tauriInvoke("start_recording");
-      setIsRecording(true);
-      startTimer();
-      await tauriInvoke("show_recording_bar").catch(() => {});
+      // NOTE: We don't set isRecording here — the "recording-started" event does it.
+      // This prevents double-setting when both the command return and event fire.
     } catch (err) {
       console.error("Failed to start recording:", err);
       reset();
     }
-  }, [isRecording, reset, setIsRecording, startTimer]);
+  }, [isRecording, reset]);
 
   // Manual stop recording (from button click)
   const stopRecording = useCallback(async () => {
     if (!isRecording) return;
     try {
-      stopTimer();
-      setIsRecording(false);
-      await tauriInvoke("hide_recording_bar").catch(() => {});
-
-      const result = await tauriInvoke<StopResult>("stop_recording");
-      setSessionId(result.sessionId);
-      setDurationMs(result.durationMs);
-
-      await transcribeAndPaste(result.sessionId, result.durationMs);
+      await tauriInvoke("stop_recording");
+      // NOTE: We don't call transcribeAndPaste here.
+      // The "recording-stopped" event handler will trigger it exactly once.
     } catch (err) {
       console.error("Failed to stop recording:", err);
       reset();
     }
-  }, [
-    isRecording,
-    stopTimer,
-    setIsRecording,
-    setSessionId,
-    setDurationMs,
-    transcribeAndPaste,
-    reset,
-  ]);
+  }, [isRecording, reset]);
 
   const toggleRecording = useCallback(async () => {
     if (isRecording) {
@@ -238,13 +218,18 @@ export function useRecording() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  // Listen for Tauri events from the Rust backend
+  // Listen for Tauri events from the Rust backend.
+  // This is the SINGLE source of truth for recording state changes and transcription.
   useEffect(() => {
+    let cancelled = false;
     const cleanups: ((() => void) | undefined)[] = [];
 
     const setup = async () => {
+      if (cancelled) return;
+
       cleanups.push(
         await tauriListen("recording-started", () => {
+          if (cancelled) return;
           setIsRecording(true);
           setDurationMs(0);
           startTimer();
@@ -253,6 +238,7 @@ export function useRecording() {
 
       cleanups.push(
         await tauriListen<StopResult>("recording-stopped", (payload) => {
+          if (cancelled) return;
           stopTimer();
           setIsRecording(false);
           setSessionId(payload.sessionId);
@@ -265,6 +251,7 @@ export function useRecording() {
     setup();
 
     return () => {
+      cancelled = true;
       cleanups.forEach((fn) => fn?.());
     };
   }, [

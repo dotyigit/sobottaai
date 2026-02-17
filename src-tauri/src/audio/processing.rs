@@ -36,8 +36,25 @@ pub fn resample(samples: &[f32], source_rate: u32, target_rate: u32) -> Vec<f32>
     output
 }
 
-/// Full preprocessing pipeline: multi-channel -> mono -> 16kHz.
+/// Normalize audio to peak amplitude of ~0.95 to ensure Whisper gets usable levels.
+pub fn normalize(samples: &mut [f32]) {
+    let max = samples.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+    if max < 0.001 {
+        // Audio is essentially silence — don't amplify noise
+        return;
+    }
+    let gain = 0.95 / max;
+    // Cap the gain to avoid amplifying quiet noise too much (max ~30x / ~30dB boost)
+    let gain = gain.min(30.0);
+    for s in samples.iter_mut() {
+        *s *= gain;
+    }
+}
+
+/// Full preprocessing pipeline: multi-channel -> mono -> 16kHz -> normalize.
 pub fn preprocess(samples: &[f32], channels: u16, sample_rate: u32) -> Vec<f32> {
     let mono = to_mono(samples, channels);
-    resample(&mono, sample_rate, 16000)
+    let mut resampled = resample(&mono, sample_rate, 16000);
+    normalize(&mut resampled);
+    resampled
 }

@@ -216,6 +216,18 @@ pub fn stop_recording(
         }
     }
 
+    // Log audio stats for debugging
+    let max_amplitude = processed.iter().map(|s| s.abs()).fold(0.0f32, f32::max);
+    let rms = (processed.iter().map(|s| s * s).sum::<f32>() / processed.len() as f32).sqrt();
+    log::info!(
+        "Recording stopped: {} samples, {}ms, session={}, max_amp={:.4}, rms={:.4}",
+        sample_count,
+        duration_ms,
+        session_id,
+        max_amplitude,
+        rms,
+    );
+
     // Store processed audio in session map for transcription
     state
         .sessions
@@ -232,12 +244,6 @@ pub fn stop_recording(
     // Emit event so frontend knows recording stopped
     let _ = app.emit("recording-stopped", result.clone());
 
-    log::info!(
-        "Recording stopped: {} samples, {}ms, session={}",
-        sample_count,
-        duration_ms,
-        session_id
-    );
     Ok(result)
 }
 
@@ -256,7 +262,7 @@ pub fn show_recording_bar(app: AppHandle) -> Result<(), String> {
     .inner_size(360.0, 64.0)
     .always_on_top(true)
     .decorations(false)
-    .transparent(true)
+    .transparent(false)
     .resizable(false)
     .skip_taskbar(true)
     .center()

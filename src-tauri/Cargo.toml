@@ -31,9 +31,6 @@ tauri-plugin-shell = "2"
 cpal = "0.15"
 hound = "3.5"
 
-# Speech-to-text
-whisper-rs = "0.15"
-
 # Keyboard simulation for auto-paste
 enigo = "0.3"
 
@@ -61,3 +58,10 @@ regex = "1"
 once_cell = "1"
 futures-util = "0.3"
 async-trait = "0.1"
+
+# Speech-to-text: Metal GPU acceleration on macOS, plain CPU elsewhere
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.15", features = ["metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+whisper-rs = "0.15"
