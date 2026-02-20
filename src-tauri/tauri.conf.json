@@ -40,7 +40,7 @@
     ],
     "category": "public.app-category.productivity",
     "macOS": {
-      "minimumSystemVersion": "13.0",
+      "minimumSystemVersion": "15.0",
       "entitlements": "Entitlements.plist",
       "frameworks": [
         "dylibs/libonnxruntime.1.17.1.dylib",

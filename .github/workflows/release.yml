@@ -112,6 +112,7 @@ jobs:
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
           # Required for linuxdeploy AppImage creation on ubuntu-22.04
           NO_STRIP: "true"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
@@ -150,7 +151,6 @@ jobs:
 
           # Read signatures
           DARWIN_AARCH64_SIG=""
-          DARWIN_X86_64_SIG=""
           LINUX_X86_64_SIG=""
           WINDOWS_X86_64_SIG=""
 
@@ -160,7 +160,6 @@ jobs:
             BASENAME=$(basename "$f")
             case "$BASENAME" in
               *aarch64.app.tar.gz.sig)   DARWIN_AARCH64_SIG="$SIG" ;;
-              *x64.app.tar.gz.sig)       DARWIN_X86_64_SIG="$SIG" ;;
               *amd64.AppImage.tar.gz.sig) LINUX_X86_64_SIG="$SIG" ;;
               *x64-setup.nsis.zip.sig)   WINDOWS_X86_64_SIG="$SIG" ;;
             esac
@@ -177,10 +176,6 @@ jobs:
               "darwin-aarch64": {
                 "signature": "${DARWIN_AARCH64_SIG}",
                 "url": "${BASE_URL}/SobottaAI_aarch64.app.tar.gz"
-              },
-              "darwin-x86_64": {
-                "signature": "${DARWIN_X86_64_SIG}",
-                "url": "${BASE_URL}/SobottaAI_x64.app.tar.gz"
               },
               "linux-x86_64": {
                 "signature": "${LINUX_X86_64_SIG}",
@@ -258,7 +253,7 @@ jobs:
             end
 
             auto_updates true
-            depends_on macos: ">= :ventura"
+            depends_on macos: ">= :sequoia"
 
             app "SobottaAI.app"
 
