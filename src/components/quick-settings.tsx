@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Globe, Sparkles, Download, AlertCircle } from "lucide-react";
-import { motion, AnimatePresence, LayoutGroup } from "motion/react";
+import { motion, LayoutGroup } from "motion/react";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import { ComboboxPicker, type ComboboxOption } from "@/components/combobox-picker";
@@ -51,13 +51,12 @@ function PillButton({
   disabled,
   onClick,
   children,
-  value,
 }: {
   active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
-  value: string;
+  value?: string;
 }) {
   return (
     <button

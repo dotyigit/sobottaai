@@ -14,7 +14,6 @@ vi.mock("motion/react", () => ({
       onClick,
       disabled,
       className,
-      ...props
     }: React.PropsWithChildren<{
       onClick?: () => void;
       disabled?: boolean;

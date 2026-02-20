@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { Plus, X, Loader2, BookOpen, CornerDownLeft } from "lucide-react";
+import { X, Loader2, BookOpen, CornerDownLeft } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+
 
 interface VocabularyTerm {
   id: string;

@@ -10,10 +10,12 @@ import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
 function useIsMac() {
-  const [isMac, setIsMac] = useState(true);
-  useEffect(() => {
-    setIsMac(navigator.userAgent.includes("Mac"));
-  }, []);
+  const [isMac] = useState(() => {
+    if (typeof navigator !== "undefined") {
+      return navigator.userAgent.includes("Mac");
+    }
+    return true;
+  });
   return isMac;
 }
 

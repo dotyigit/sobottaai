@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { History, Settings, Minus, Square, X, ArrowLeft, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,12 @@ async function getWindow() {
 export function Titlebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [isMac, setIsMac] = useState(true);
-
-  useEffect(() => {
-    setIsMac(navigator.userAgent.includes("Mac"));
-  }, []);
+  const [isMac] = useState(() => {
+    if (typeof navigator !== "undefined") {
+      return navigator.userAgent.includes("Mac");
+    }
+    return true;
+  });
 
   const isSettings = pathname.startsWith("/settings");
   const isHistory = pathname === "/history";

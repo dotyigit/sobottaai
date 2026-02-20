@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import {
   Plus,
   Trash2,
-  Loader2,
   Sparkles,
   Code2,
   FileText,

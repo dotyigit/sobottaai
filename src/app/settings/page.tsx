@@ -5,7 +5,6 @@ import { motion } from "motion/react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
 function SettingRow({

@@ -28,7 +28,10 @@ function SoundBars({ level }: { level: number }) {
   );
   const rafRef = useRef<number>(0);
   const levelRef = useRef(0);
-  levelRef.current = level;
+
+  useEffect(() => {
+    levelRef.current = level;
+  }, [level]);
 
   useEffect(() => {
     const velocities = Array(BAR_COUNT).fill(0);
