@@ -43,14 +43,14 @@
       "minimumSystemVersion": "13.0",
       "entitlements": "Entitlements.plist",
       "frameworks": [
-        "target/release/libonnxruntime.1.17.1.dylib",
-        "target/release/libsherpa-onnx-c-api.dylib"
+        "dylibs/libonnxruntime.1.17.1.dylib",
+        "dylibs/libsherpa-onnx-c-api.dylib"
       ]
     }
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3ODFBQTY2MkZGNUI4NDEKUldSQnVQVXZacXFCbDQ5NFhZelhDYTMxQkZhaW1JcURaNEFxNytUQ2RvQlBPcm1jQ1dBTDVNR1oK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFRTEzQjg2RTE1OEQxOUQKUldTZDBWamhoanZoSHJPdVV6TTJ2MmdwdGdKc2RTcWZIVjZtWmtDUjNKN0pJeVpYRGRxWEl5K3cK",
       "endpoints": [
         "https://github.com/dotyigit/sobottaai/releases/latest/download/latest.json"
       ]

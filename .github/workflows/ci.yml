@@ -26,10 +26,10 @@ jobs:
 
   backend:
     name: Backend (cargo check + clippy)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    # macOS excluded: whisper-rs-sys i8mm bug on GitHub ARM runners
+    # Windows excluded: sherpa-rs download-binaries doesn't work with cargo check
+    # The release workflow validates full builds on all platforms
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -39,9 +39,7 @@ jobs:
         with:
           workspaces: src-tauri
 
-      # Linux dependencies
       - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -49,7 +47,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libasound2-dev
+            libasound2-dev \
+            libxdo-dev
 
       - name: Cargo check
         working-directory: src-tauri

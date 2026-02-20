@@ -2,3 +2,6 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# Dylibs copied by build.rs for bundling
+/dylibs/
