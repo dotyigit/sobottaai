@@ -20,9 +20,7 @@ impl WhisperEngine {
 
         log::info!("Whisper model loaded: {:?}", model_path);
 
-        Ok(Self {
-            ctx: Arc::new(ctx),
-        })
+        Ok(Self { ctx: Arc::new(ctx) })
     }
 }
 
@@ -75,7 +73,7 @@ impl SttEngine for WhisperEngine {
 
         // Use available CPU threads (cap at 8)
         let n_threads = std::thread::available_parallelism()
-            .map(|n| n.get().max(1).min(8) as i32)
+            .map(|n| n.get().clamp(1, 8) as i32)
             .unwrap_or(4);
         params.set_n_threads(n_threads);
 

@@ -34,6 +34,7 @@ pub async fn delete_history_item(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn save_history_item(
     app: AppHandle,
     session_id: String,

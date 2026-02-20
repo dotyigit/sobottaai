@@ -2,7 +2,7 @@ pub mod parakeet_models;
 pub mod whisper_models;
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,15 +48,15 @@ pub enum DownloadStatus {
     Failed(String),
 }
 
-pub fn models_dir(app_data_dir: &PathBuf) -> PathBuf {
+pub fn models_dir(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("models")
 }
 
-pub fn model_path(app_data_dir: &PathBuf, model_id: &str) -> PathBuf {
+pub fn model_path(app_data_dir: &Path, model_id: &str) -> PathBuf {
     models_dir(app_data_dir).join(model_id)
 }
 
-pub fn is_model_downloaded(app_data_dir: &PathBuf, model: &ModelInfo) -> bool {
+pub fn is_model_downloaded(app_data_dir: &Path, model: &ModelInfo) -> bool {
     // Cloud models don't need downloads
     if matches!(model.engine, Engine::CloudOpenAI | Engine::CloudGroq) {
         return true;
@@ -104,7 +104,7 @@ pub fn full_catalog() -> Vec<ModelInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn full_catalog_contains_all_models() {
@@ -128,14 +128,24 @@ mod tests {
     #[test]
     fn whisper_models_have_correct_engine() {
         for model in whisper_models::catalog() {
-            assert_eq!(model.engine, Engine::Whisper, "Model {} should be Whisper", model.id);
+            assert_eq!(
+                model.engine,
+                Engine::Whisper,
+                "Model {} should be Whisper",
+                model.id
+            );
         }
     }
 
     #[test]
     fn parakeet_models_have_correct_engine() {
         for model in parakeet_models::catalog() {
-            assert_eq!(model.engine, Engine::Parakeet, "Model {} should be Parakeet", model.id);
+            assert_eq!(
+                model.engine,
+                Engine::Parakeet,
+                "Model {} should be Parakeet",
+                model.id
+            );
         }
     }
 
@@ -150,7 +160,11 @@ mod tests {
     #[test]
     fn cloud_models_have_no_files_to_download() {
         for model in cloud_models() {
-            assert!(model.files.is_empty(), "Cloud model {} should have no files", model.id);
+            assert!(
+                model.files.is_empty(),
+                "Cloud model {} should have no files",
+                model.id
+            );
             assert!(model.download_urls.is_empty());
             assert_eq!(model.size_bytes, 0);
         }
@@ -162,9 +176,21 @@ mod tests {
             if matches!(model.engine, Engine::CloudOpenAI | Engine::CloudGroq) {
                 continue;
             }
-            assert!(!model.files.is_empty(), "Local model {} should have files", model.id);
-            assert!(!model.download_urls.is_empty(), "Local model {} should have download URLs", model.id);
-            assert!(model.size_bytes > 0, "Local model {} should have size > 0", model.id);
+            assert!(
+                !model.files.is_empty(),
+                "Local model {} should have files",
+                model.id
+            );
+            assert!(
+                !model.download_urls.is_empty(),
+                "Local model {} should have download URLs",
+                model.id
+            );
+            assert!(
+                model.size_bytes > 0,
+                "Local model {} should have size > 0",
+                model.id
+            );
         }
     }
 
@@ -267,6 +293,9 @@ mod tests {
     #[test]
     fn parakeet_v3_is_multilingual() {
         let models = parakeet_models::catalog();
-        assert!(matches!(models[1].languages, LanguageSupport::Multilingual(25)));
+        assert!(matches!(
+            models[1].languages,
+            LanguageSupport::Multilingual(25)
+        ));
     }
 }

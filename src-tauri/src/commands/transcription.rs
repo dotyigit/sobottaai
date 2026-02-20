@@ -4,7 +4,7 @@ use crate::stt::parakeet::ParakeetEngine;
 use crate::stt::whisper::WhisperEngine;
 use crate::stt::{SttEngine, TranscriptionOptions, TranscriptionResult};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
@@ -28,7 +28,7 @@ impl SttManager {
     fn get_or_load(
         &self,
         model_id: &str,
-        app_data_dir: &PathBuf,
+        app_data_dir: &Path,
     ) -> Result<Arc<dyn SttEngine>, String> {
         let mut engines = self.engines.lock().unwrap();
 
@@ -86,6 +86,7 @@ fn engine_for_model(model_id: &str) -> Option<models::Engine> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn transcribe(
     app: AppHandle,
     recording_state: State<'_, RecordingState>,
@@ -167,6 +168,7 @@ pub async fn transcribe(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn transcribe_file(
     app: AppHandle,
     recording_state: State<'_, RecordingState>,

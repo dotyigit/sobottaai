@@ -46,9 +46,8 @@ pub fn catalog() -> Vec<ModelInfo> {
                 "tokens.txt".into(),
             ],
             languages: LanguageSupport::Multilingual(25),
-            description:
-                "NVIDIA Parakeet TDT v3 (INT8) - 25 European languages, auto-detection."
-                    .into(),
+            description: "NVIDIA Parakeet TDT v3 (INT8) - 25 European languages, auto-detection."
+                .into(),
         },
     ]
 }

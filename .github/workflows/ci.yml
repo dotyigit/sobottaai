@@ -56,4 +56,4 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
-        run: cargo clippy -- -D warnings -A clippy::missing_docs -A dead_code
+        run: cargo clippy -- -D warnings -A dead_code

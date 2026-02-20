@@ -31,7 +31,7 @@ impl ParakeetEngine {
             .to_string();
 
         let n_threads = std::thread::available_parallelism()
-            .map(|n| n.get().max(1).min(8) as i32)
+            .map(|n| n.get().clamp(1, 8) as i32)
             .unwrap_or(4);
 
         // Use CoreML on macOS for GPU acceleration, CPU elsewhere
@@ -64,7 +64,10 @@ impl ParakeetEngine {
         let start = std::time::Instant::now();
         let recognizer = TransducerRecognizer::new(config)
             .map_err(|e| anyhow::anyhow!("Failed to create Parakeet recognizer: {}", e))?;
-        log::info!("Parakeet engine loaded in {}ms", start.elapsed().as_millis());
+        log::info!(
+            "Parakeet engine loaded in {}ms",
+            start.elapsed().as_millis()
+        );
 
         Ok(Self {
             recognizer: Mutex::new(recognizer),
