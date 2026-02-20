@@ -1,3 +1,9 @@
+import type {
+  CheckOptions,
+  DownloadEvent as UpdaterDownloadEvent,
+  Update,
+} from "@tauri-apps/plugin-updater";
+
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
   return tauriInvoke<T>(cmd, args);
@@ -173,3 +179,20 @@ export function addTerm(term: string): Promise<void> {
 export function deleteTerm(id: string): Promise<void> {
   return invoke("delete_term", { id });
 }
+
+// ── App / Updater ───────────────────────────────────────────
+
+export function restartApp(): Promise<void> {
+  return invoke("restart_app");
+}
+
+export async function getAppVersion(): Promise<string> {
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
+export function checkForUpdate(options?: CheckOptions): Promise<Update | null> {
+  return import("@tauri-apps/plugin-updater").then(({ check }) => check(options));
+}
+
+export type { Update, UpdaterDownloadEvent };

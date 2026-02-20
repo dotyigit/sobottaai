@@ -41,8 +41,7 @@ pub fn update_hotkey(app: AppHandle, hotkey: String) -> Result<(), String> {
     manager.unregister_all().map_err(|e| e.to_string())?;
 
     // Register via the shared handler that reads HotkeyModeState
-    crate::system::hotkey::register_shortcut(&app, shortcut)
-        .map_err(|e| e.to_string())?;
+    crate::system::hotkey::register_shortcut(&app, shortcut).map_err(|e| e.to_string())?;
 
     log::info!("Global hotkey updated to: {}", hotkey);
     Ok(())
@@ -55,4 +54,9 @@ pub fn update_recording_mode(app: AppHandle, mode: String) -> Result<(), String>
     *state.mode.lock().unwrap() = mode.clone();
     log::info!("Recording mode updated to: {}", mode);
     Ok(())
+}
+
+#[tauri::command]
+pub fn restart_app(app: AppHandle) -> Result<(), String> {
+    app.restart();
 }

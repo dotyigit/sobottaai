@@ -1,10 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Settings, Keyboard, Box, Sparkles, Wand2, BookOpen, Key } from "lucide-react";
+import {
+  Settings,
+  Keyboard,
+  Box,
+  Sparkles,
+  Wand2,
+  BookOpen,
+  Key,
+  ArrowUpCircle,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { AppShell } from "@/components/app-shell";
+import { getAppVersion } from "@/lib/tauri-commands";
 
 const NAV_ITEMS = [
   { href: "/settings", label: "General", icon: Settings },
@@ -14,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/settings/ai-functions", label: "AI Functions", icon: Sparkles },
   { href: "/settings/vocabulary", label: "Vocabulary", icon: BookOpen },
   { href: "/settings/providers", label: "API Keys", icon: Key },
+  { href: "/settings/update", label: "Update", icon: ArrowUpCircle },
 ];
 
 export default function SettingsLayout({
@@ -23,6 +35,25 @@ export default function SettingsLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const [appVersion, setAppVersion] = useState("v0.1.1");
+
+  useEffect(() => {
+    let mounted = true;
+
+    getAppVersion()
+      .then((version) => {
+        if (mounted) {
+          setAppVersion(`v${version}`);
+        }
+      })
+      .catch(() => {
+        // Running outside Tauri (web preview/tests)
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <AppShell>
@@ -62,7 +93,7 @@ export default function SettingsLayout({
             })}
           </nav>
           <div className="px-4 py-3 border-t">
-            <p className="text-[10px] text-muted-foreground/50">v0.1.0</p>
+            <p className="text-[10px] text-muted-foreground/50">{appVersion}</p>
           </div>
         </aside>
 

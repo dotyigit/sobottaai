@@ -110,6 +110,7 @@ pub fn run() {
             commands::settings::update_hotkey,
             commands::settings::update_recording_mode,
             commands::settings::sync_tray,
+            commands::settings::restart_app,
             // Vocabulary
             commands::vocabulary::get_vocabulary,
             commands::vocabulary::add_term,
@@ -121,11 +122,5 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
-            // Prevent the app from exiting when all windows are hidden.
-            // The app lives in the system tray — only "Quit" should kill it.
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                api.prevent_exit();
-            }
-        });
+        .run(|_app_handle, _event| {});
 }

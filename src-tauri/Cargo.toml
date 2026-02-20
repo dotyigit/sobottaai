@@ -1,6 +1,6 @@
 [package]
 name = "sobottaai"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open-source cross-platform voice-to-text with local AI"
 authors = ["SobottaAI Contributors"]
 license = "MIT"

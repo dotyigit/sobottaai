@@ -58,6 +58,12 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+## Release CI Runbook
+
+For release pipeline troubleshooting and the cross-platform native library strategy, see:
+
+- `docs/release-ci-runbook.md`
+
 ## Tech Stack
 
 | Layer | Technology |
