@@ -109,7 +109,29 @@ jobs:
           tar -xjf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
 
           cp "${EXTRACTED_DIR}/lib/libonnxruntime.1.17.1.dylib" "${TARGET_DIR}/"
+          cp "${EXTRACTED_DIR}/lib/libonnxruntime.dylib" "${TARGET_DIR}/"
           cp "${EXTRACTED_DIR}/lib/libsherpa-onnx-c-api.dylib" "${TARGET_DIR}/"
+
+      - name: Prepare sherpa-onnx Linux libs
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE="sherpa-onnx-v1.12.9-linux-x64-shared.tar.bz2"
+          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.9/${ARCHIVE}"
+          TMP_DIR="${RUNNER_TEMP}/sherpa-linux"
+          EXTRACTED_DIR="${TMP_DIR}/sherpa-onnx-v1.12.9-linux-x64-shared"
+          TARGET_LIB_DIR="${GITHUB_WORKSPACE}/src-tauri/vendor/sherpa-linux/lib"
+
+          rm -rf "${TMP_DIR}" "${GITHUB_WORKSPACE}/src-tauri/vendor/sherpa-linux"
+          mkdir -p "${TMP_DIR}" "${TARGET_LIB_DIR}"
+
+          curl -L --fail "${URL}" -o "${TMP_DIR}/${ARCHIVE}"
+          tar -xjf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
+
+          cp "${EXTRACTED_DIR}/lib/libonnxruntime.so" "${TARGET_LIB_DIR}/"
+          cp "${EXTRACTED_DIR}/lib/libsherpa-onnx-c-api.so" "${TARGET_LIB_DIR}/"
 
       - name: Prepare sherpa-onnx Windows libs
         if: matrix.platform == 'windows-latest'
@@ -154,7 +176,7 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
-          RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && format('-L native={0}/src-tauri/vendor/sherpa-win/lib', github.workspace) || '' }}
+          RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && format('-L native={0}/src-tauri/vendor/sherpa-win/lib', github.workspace) || matrix.platform == 'ubuntu-22.04' && format('-L native={0}/src-tauri/vendor/sherpa-linux/lib', github.workspace) || startsWith(matrix.platform, 'macos') && format('-L native={0}/src-tauri/dylibs', github.workspace) || '' }}
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
