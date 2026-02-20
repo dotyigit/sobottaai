@@ -32,20 +32,5 @@ fn main() {
         }
     }
 
-    // Windows: sherpa-rs-sys 0.6.8 erroneously links `cargs.lib` (a CLI-only
-    // dependency not needed by the C API). The fix is merged upstream but not
-    // yet released. Work around it by providing an empty COFF archive so the
-    // linker resolves the library without error.
-    #[cfg(target_os = "windows")]
-    {
-        let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
-        let cargs_lib = out_dir.join("cargs.lib");
-        if !cargs_lib.exists() {
-            // Minimal valid COFF archive (just the signature, no members)
-            std::fs::write(&cargs_lib, b"!<arch>\n").unwrap();
-        }
-        println!("cargo:rustc-link-search=native={}", out_dir.display());
-    }
-
     tauri_build::build()
 }
