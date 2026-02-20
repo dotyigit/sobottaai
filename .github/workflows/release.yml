@@ -19,12 +19,10 @@ jobs:
       matrix:
         include:
           # Native builds: each platform builds for its own architecture
-          # Avoids cross-compile issues with whisper-rs-sys (i8mm) and sherpa-rs dylib paths
+          # macOS: aarch64 only — Rosetta 2 handles Intel Macs
+          # (macos-13 Intel runners are deprecated/unavailable)
           - platform: macos-14
             target: aarch64-apple-darwin
-            args: ""
-          - platform: macos-13
-            target: x86_64-apple-darwin
             args: ""
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
@@ -66,7 +64,8 @@ jobs:
             librsvg2-dev \
             patchelf \
             libasound2-dev \
-            libxdo-dev
+            libxdo-dev \
+            libfuse2
 
       - name: Install Apple certificate
         if: startsWith(matrix.platform, 'macos')
@@ -111,6 +110,8 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
+          # Required for linuxdeploy AppImage creation on ubuntu-22.04
+          NO_STRIP: "true"
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
