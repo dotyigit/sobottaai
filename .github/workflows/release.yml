@@ -4,38 +4,30 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.platform }}
-    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Native builds: each platform builds for its own architecture
-          # macOS: aarch64 only — Rosetta 2 handles Intel Macs
-          # (macos-13 Intel runners are deprecated/unavailable)
           - platform: macos-14
-            target: aarch64-apple-darwin
-            args: ""
+            args: "--target aarch64-apple-darwin"
+            rust_target: aarch64-apple-darwin
           - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
             args: "--bundles deb,rpm"
+            rust_target: x86_64-unknown-linux-gnu
           - platform: windows-latest
-            target: x86_64-pc-windows-msvc
             args: ""
+            rust_target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
 
     steps:
-      - name: Enable git long paths (Windows)
-        if: matrix.platform == 'windows-latest'
-        run: git config --system core.longpaths true
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -52,9 +44,11 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
@@ -77,11 +71,6 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          if [ -z "$APPLE_CERTIFICATE_BASE64" ]; then
-            echo "No Apple certificate configured — skipping code signing"
-            exit 0
-          fi
-
           CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
@@ -106,14 +95,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_BASE64 || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
           APPLE_SIGNING_IDENTITY: ${{ startsWith(matrix.platform, 'macos') && 'Developer ID Application' || '' }}
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
-
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
@@ -127,7 +115,6 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
 
   publish-update-manifest:
-    name: Publish update manifest
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -148,42 +135,43 @@ jobs:
 
           mkdir -p assets
           gh release download "$TAG" --repo "$REPO" --dir assets --pattern "*.sig" || true
-          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "latest.json" || true
 
-          # Read signatures
-          DARWIN_AARCH64_SIG=""
-          WINDOWS_X86_64_SIG=""
+          sudo apt-get install -y jq > /dev/null 2>&1 || true
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-          for f in assets/*.sig; do
-            [ -f "$f" ] || continue
-            SIG=$(cat "$f")
-            BASENAME=$(basename "$f")
-            case "$BASENAME" in
-              *aarch64.app.tar.gz.sig) DARWIN_AARCH64_SIG="$SIG" ;;
-              *x64-setup.nsis.zip.sig) WINDOWS_X86_64_SIG="$SIG" ;;
-            esac
-          done
+          JSON=$(jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$PUB_DATE" \
+            '{version: $version, notes: "", pub_date: $pub_date, platforms: {}}')
 
-          # Build merged latest.json (macOS + Windows only)
-          # Linux ships .deb/.rpm — no AppImage, so no updater entry
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          cat > latest.json <<EOJSON
-          {
-            "version": "${VERSION}",
-            "notes": "See https://github.com/${REPO}/releases/tag/${TAG}",
-            "pub_date": "${NOW}",
-            "platforms": {
-              "darwin-aarch64": {
-                "signature": "${DARWIN_AARCH64_SIG}",
-                "url": "${BASE_URL}/SobottaAI_aarch64.app.tar.gz"
-              },
-              "windows-x86_64": {
-                "signature": "${WINDOWS_X86_64_SIG}",
-                "url": "${BASE_URL}/SobottaAI_${VERSION}_x64-setup.nsis.zip"
-              }
-            }
-          }
-          EOJSON
+          # macOS aarch64
+          SIG_FILE=$(ls assets/*aarch64*.tar.gz.sig 2>/dev/null | head -1)
+          if [ -n "$SIG_FILE" ] && [ -f "$SIG_FILE" ]; then
+            SIG=$(cat "$SIG_FILE")
+            ARTIFACT_NAME=$(basename "$SIG_FILE" .sig)
+            JSON=$(echo "$JSON" | jq \
+              --arg url "${BASE_URL}/${ARTIFACT_NAME}" \
+              --arg sig "$SIG" \
+              '.platforms["darwin-aarch64"] = {signature: $sig, url: $url}')
+          fi
+
+          # Windows x86_64
+          SIG_FILE=$(ls assets/*setup*.exe.sig 2>/dev/null | head -1)
+          if [ -z "$SIG_FILE" ]; then
+            SIG_FILE=$(ls assets/*.nsis.zip.sig 2>/dev/null | head -1)
+          fi
+          if [ -n "$SIG_FILE" ] && [ -f "$SIG_FILE" ]; then
+            SIG=$(cat "$SIG_FILE")
+            ARTIFACT_NAME=$(basename "$SIG_FILE" .sig)
+            JSON=$(echo "$JSON" | jq \
+              --arg url "${BASE_URL}/${ARTIFACT_NAME}" \
+              --arg sig "$SIG" \
+              '.platforms["windows-x86_64"] = {signature: $sig, url: $url}')
+          fi
+
+          echo "$JSON" | jq . > latest.json
+          echo "Generated latest.json:"
+          cat latest.json
 
       - name: Upload merged latest.json
         env:
@@ -195,7 +183,6 @@ jobs:
           gh release upload "$TAG" latest.json --repo "$REPO" --clobber
 
   update-homebrew:
-    name: Update Homebrew cask
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -214,26 +201,23 @@ jobs:
           TAG="v${VERSION}"
           REPO="dotyigit/sobottaai"
 
-          # Download the aarch64 DMG to compute its SHA256
           mkdir -p assets
-          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "*aarch64.dmg" || true
+          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "*.dmg" || true
 
-          DMG_FILE=$(ls assets/*aarch64.dmg 2>/dev/null | head -1)
+          DMG_FILE=$(ls assets/*.dmg 2>/dev/null | head -1)
           if [ -z "$DMG_FILE" ]; then
-            echo "No aarch64 DMG found — skipping Homebrew update"
+            echo "No DMG found — skipping Homebrew update"
             exit 0
           fi
 
           SHA256=$(sha256sum "$DMG_FILE" | awk '{print $1}')
-          echo "DMG SHA256: $SHA256"
 
-          # Clone the tap and write the cask formula
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/dotyigit/homebrew-tap.git" \
             homebrew-tap
 
           mkdir -p homebrew-tap/Casks
 
-          cat > homebrew-tap/Casks/sobottaai.rb <<EORUBY
+          cat > homebrew-tap/Casks/sobottaai.rb << CASK
           cask "sobottaai" do
             version "${VERSION}"
             sha256 "${SHA256}"
@@ -259,11 +243,11 @@ jobs:
               "~/Library/Caches/ai.sobotta.app",
             ]
           end
-          EORUBY
+          CASK
 
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/sobottaai.rb
-          git commit -m "Update sobottaai to ${VERSION}"
+          git commit -m "Update sobottaai to ${VERSION}" || true
           git push
