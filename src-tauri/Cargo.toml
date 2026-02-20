@@ -36,7 +36,7 @@ hound = "3.5"
 enigo = "0.3"
 
 # Speech-to-text: sherpa-onnx transducer (Parakeet models)
-sherpa-rs = { version = "0.6", features = ["download-binaries"] }
+sherpa-rs = { git = "https://github.com/thewh1teagle/sherpa-rs", branch = "main", features = ["download-binaries"] }
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }

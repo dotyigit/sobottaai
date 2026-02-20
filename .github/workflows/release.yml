@@ -26,7 +26,7 @@ jobs:
             args: ""
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            args: ""
+            args: "--bundles deb,rpm"
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             args: ""
@@ -64,8 +64,7 @@ jobs:
             librsvg2-dev \
             patchelf \
             libasound2-dev \
-            libxdo-dev \
-            libfuse2
+            libxdo-dev
 
       - name: Install Apple certificate
         if: startsWith(matrix.platform, 'macos')
@@ -110,9 +109,7 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
-          # Required for linuxdeploy AppImage creation on ubuntu-22.04
-          NO_STRIP: "true"
-          APPIMAGE_EXTRACT_AND_RUN: "1"
+
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
@@ -151,7 +148,6 @@ jobs:
 
           # Read signatures
           DARWIN_AARCH64_SIG=""
-          LINUX_X86_64_SIG=""
           WINDOWS_X86_64_SIG=""
 
           for f in assets/*.sig; do
@@ -159,13 +155,13 @@ jobs:
             SIG=$(cat "$f")
             BASENAME=$(basename "$f")
             case "$BASENAME" in
-              *aarch64.app.tar.gz.sig)   DARWIN_AARCH64_SIG="$SIG" ;;
-              *amd64.AppImage.tar.gz.sig) LINUX_X86_64_SIG="$SIG" ;;
-              *x64-setup.nsis.zip.sig)   WINDOWS_X86_64_SIG="$SIG" ;;
+              *aarch64.app.tar.gz.sig) DARWIN_AARCH64_SIG="$SIG" ;;
+              *x64-setup.nsis.zip.sig) WINDOWS_X86_64_SIG="$SIG" ;;
             esac
           done
 
-          # Build merged latest.json
+          # Build merged latest.json (macOS + Windows only)
+          # Linux ships .deb/.rpm — no AppImage, so no updater entry
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           cat > latest.json <<EOJSON
           {
@@ -176,10 +172,6 @@ jobs:
               "darwin-aarch64": {
                 "signature": "${DARWIN_AARCH64_SIG}",
                 "url": "${BASE_URL}/SobottaAI_aarch64.app.tar.gz"
-              },
-              "linux-x86_64": {
-                "signature": "${LINUX_X86_64_SIG}",
-                "url": "${BASE_URL}/SobottaAI_${VERSION}_amd64.AppImage.tar.gz"
               },
               "windows-x86_64": {
                 "signature": "${WINDOWS_X86_64_SIG}",
