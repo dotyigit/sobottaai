@@ -69,12 +69,17 @@ jobs:
             libxdo-dev
 
       - name: Install Apple certificate
-        if: startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_BASE64 != ''
+        if: startsWith(matrix.platform, 'macos')
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          if [ -z "$APPLE_CERTIFICATE_BASE64" ]; then
+            echo "No Apple certificate configured — skipping code signing"
+            exit 0
+          fi
+
           CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
@@ -114,7 +119,7 @@ jobs:
           args: ${{ matrix.args }}
 
       - name: Cleanup keychain
-        if: startsWith(matrix.platform, 'macos') && always() && secrets.APPLE_CERTIFICATE_BASE64 != ''
+        if: startsWith(matrix.platform, 'macos') && always()
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
 
