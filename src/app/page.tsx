@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, MicOff, History, Settings, Keyboard, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ModelSelector } from "@/components/model-selector";
-import { LanguageSelector } from "@/components/language-selector";
-import { AiFunctionPicker } from "@/components/ai-function-picker";
+import { Keyboard } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+
+import { AppShell } from "@/components/app-shell";
+import { RecordButton } from "@/components/record-button";
+import { QuickSettings } from "@/components/quick-settings";
 import { Onboarding } from "@/components/onboarding";
 import { useRecording } from "@/hooks/use-recording";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -21,12 +21,12 @@ export default function Home() {
     isTranscribing,
     durationMs,
     lastResult,
+    audioLevel,
     toggleRecording,
   } = useRecording();
 
   useEffect(() => {
     setMounted(true);
-    // Hydrate settings from disk
     import("@/stores/settings-store").then(({ useSettingsStore }) => {
       useSettingsStore.getState().hydrate();
     });
@@ -36,13 +36,15 @@ export default function Home() {
     if (!mounted) return;
     let unlisten: (() => void) | undefined;
 
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<string>("navigate", (event) => {
-        router.push(event.payload);
-      }).then((fn) => {
-        unlisten = fn;
-      });
-    }).catch(() => {});
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => {
+        listen<string>("navigate", (event) => {
+          router.push(event.payload);
+        }).then((fn) => {
+          unlisten = fn;
+        });
+      })
+      .catch(() => {});
 
     return () => {
       unlisten?.();
@@ -53,116 +55,99 @@ export default function Home() {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
 
-  // Show onboarding on first launch
   if (_hydrated && !onboardingComplete) {
-    return (
-      <Onboarding
-        onComplete={() => setOnboardingComplete(true)}
-      />
-    );
+    return <Onboarding onComplete={() => setOnboardingComplete(true)} />;
   }
 
-  return (
-    <div className="flex h-screen flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b px-6 py-4">
-        <div className="flex items-center gap-3">
-          <Mic className="h-6 w-6" />
-          <h1 className="text-xl font-bold">SobottaAI</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/history")}>
-            <History className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => router.push("/settings")}>
-            <Settings className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
+  const statusKey = isRecording ? "recording" : isTranscribing ? "transcribing" : "idle";
 
-      {/* Main content */}
-      <main className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
-        <div className="flex flex-col items-center gap-4 text-center">
+  return (
+    <AppShell>
+      <div className="flex h-full flex-col">
+        {/* Hero area — centered content */}
+        <main className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+          {/* Status text */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={statusKey}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="text-center"
+            >
+              <h2 className="text-xl font-semibold tracking-tight">
+                {isRecording
+                  ? `Recording ${minutes}:${secs.toString().padStart(2, "0")}`
+                  : isTranscribing
+                    ? "Transcribing..."
+                    : "Ready to Record"}
+              </h2>
+            </motion.div>
+          </AnimatePresence>
+
           {/* Record button */}
-          <button
+          <RecordButton
+            isRecording={isRecording}
+            isTranscribing={isTranscribing}
+            audioLevel={audioLevel}
             onClick={toggleRecording}
-            disabled={isTranscribing}
-            className={`rounded-full p-8 transition-all duration-200 ${
-              isRecording
-                ? "bg-red-500/10 border-2 border-red-500 shadow-lg shadow-red-500/20"
-                : isTranscribing
-                  ? "border-2 border-muted-foreground/25 opacity-60 cursor-wait"
-                  : "border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/50"
-            }`}
+          />
+
+          {/* Hotkey hint */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-sm text-muted-foreground"
           >
             {isRecording ? (
-              <MicOff className="h-12 w-12 text-red-500 animate-pulse" />
-            ) : isTranscribing ? (
-              <Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />
-            ) : (
-              <Mic className="h-12 w-12 text-muted-foreground" />
-            )}
-          </button>
-
-          <h2 className="text-2xl font-semibold">
-            {isRecording
-              ? `Recording ${minutes}:${secs.toString().padStart(2, "0")}`
-              : isTranscribing
-                ? "Transcribing..."
-                : "Ready to record"}
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            {isRecording ? (
-              "Click the button or release the hotkey to stop recording."
+              "Release hotkey or click to stop"
             ) : (
               <>
-                Click the button or press{" "}
-                <kbd className="rounded border bg-muted px-1.5 py-0.5 text-xs font-mono">
-                  <Keyboard className="inline h-3 w-3 mr-1" />
-                  Cmd+Shift+Space
+                Press{" "}
+                <kbd className="rounded border border-border/60 bg-muted/60 px-1.5 py-0.5 text-xs font-mono text-foreground/70">
+                  <Keyboard className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+                  Option+Space
                 </kbd>{" "}
-                to start recording.
+                to start
               </>
             )}
-          </p>
-        </div>
+          </motion.p>
 
-        {/* Last result */}
-        {lastResult && (
-          <div className="w-full max-w-2xl rounded-lg border bg-muted/30 p-4">
-            <p className="text-sm text-muted-foreground mb-1">Last transcription</p>
-            <p className="text-sm">{lastResult}</p>
-          </div>
-        )}
+          {/* Last result */}
+          <AnimatePresence>
+            {lastResult && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ type: "spring", bounce: 0.15, duration: 0.4 }}
+                className="w-full max-w-lg overflow-hidden"
+              >
+                <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm p-4">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Last transcription
+                  </p>
+                  <div className="max-h-40 overflow-y-auto pr-1">
+                    <p className="text-sm leading-relaxed">{lastResult}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
 
-        {/* Quick settings */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Model</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ModelSelector />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Language</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LanguageSelector />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">AI Function</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AiFunctionPicker />
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    </div>
+        {/* Bottom toolbar */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="shrink-0 border-t border-border/50 bg-background/60 backdrop-blur-sm"
+        >
+          <QuickSettings />
+        </motion.div>
+      </div>
+    </AppShell>
   );
 }

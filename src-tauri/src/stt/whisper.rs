@@ -66,6 +66,13 @@ impl SttEngine for WhisperEngine {
         params.set_print_timestamps(false);
         params.set_translate(false);
 
+        // Anti-hallucination: suppress blank outputs and apply stricter
+        // no-speech / entropy thresholds to filter phantom segments.
+        params.set_suppress_blank(true);
+        params.set_suppress_nst(true);
+        params.set_no_speech_thold(0.6);
+        params.set_entropy_thold(2.4);
+
         // Use available CPU threads (cap at 8)
         let n_threads = std::thread::available_parallelism()
             .map(|n| n.get().max(1).min(8) as i32)

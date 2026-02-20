@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Open-source cross-platform voice-to-text with local AI"
 authors = ["SobottaAI Contributors"]
 license = "MIT"
-repository = "https://github.com/nicoyigit/sobottaai"
+repository = "https://github.com/dotyigit/sobottaai"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # Tauri core
-tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -26,6 +26,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-store = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-updater = "2"
 
 # Audio capture and processing
 cpal = "0.15"
@@ -33,6 +34,9 @@ hound = "3.5"
 
 # Keyboard simulation for auto-paste
 enigo = "0.3"
+
+# Speech-to-text: sherpa-onnx transducer (Parakeet models)
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }

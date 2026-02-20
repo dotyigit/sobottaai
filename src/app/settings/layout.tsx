@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { ArrowLeft, Settings, Keyboard, Box, Sparkles, Wand2, BookOpen, Key } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Settings, Keyboard, Box, Sparkles, Wand2, BookOpen, Key } from "lucide-react";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { AppShell } from "@/components/app-shell";
 
 const NAV_ITEMS = [
   { href: "/settings", label: "General", icon: Settings },
@@ -24,36 +25,50 @@ export default function SettingsLayout({
   const pathname = usePathname();
 
   return (
-    <div className="flex h-screen">
-      {/* Sidebar */}
-      <aside className="w-56 border-r flex flex-col">
-        <div className="flex items-center gap-2 p-4 border-b">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h2 className="font-semibold">Settings</h2>
-        </div>
-        <nav className="flex-1 p-2 space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.href}
-              onClick={() => router.push(item.href)}
-              className={cn(
-                "flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm transition-colors",
-                pathname === item.href
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
+    <AppShell>
+      <div className="flex h-full min-h-0">
+        {/* Sidebar */}
+        <aside className="w-52 border-r border-border/50 flex flex-col shrink-0">
+          <div className="px-4 pt-4 pb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Settings
+            </h2>
+          </div>
+          <nav className="flex-1 p-2 space-y-0.5">
+            {NAV_ITEMS.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <button
+                  key={item.href}
+                  onClick={() => router.push(item.href)}
+                  className={cn(
+                    "relative flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm transition-colors",
+                    isActive
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  )}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="settings-nav-indicator"
+                      className="absolute inset-0 rounded-md bg-accent"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
+                    />
+                  )}
+                  <item.icon className="relative z-10 h-4 w-4" />
+                  <span className="relative z-10">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="px-4 py-3 border-t">
+            <p className="text-[10px] text-muted-foreground/50">v0.1.0</p>
+          </div>
+        </aside>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
-    </div>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      </div>
+    </AppShell>
   );
 }

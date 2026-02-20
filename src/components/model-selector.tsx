@@ -34,7 +34,7 @@ export function ModelSelector() {
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select model" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper" className="max-h-60">
         <SelectGroup>
           <SelectLabel>Local Models</SelectLabel>
           {LOCAL_MODELS.map((model) => (

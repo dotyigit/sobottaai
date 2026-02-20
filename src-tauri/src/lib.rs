@@ -22,6 +22,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
@@ -29,6 +30,8 @@ pub fn run() {
         )
         .manage(commands::recording::RecordingState::new())
         .manage(commands::transcription::SttManager::new())
+        .manage(system::tray::TrayMenuState::new())
+        .manage(system::hotkey::HotkeyModeState::new())
         .setup(|app| {
             let app_handle = app.handle().clone();
 
@@ -43,6 +46,12 @@ pub fn run() {
             // Setup system tray
             system::tray::setup_tray(&app_handle)?;
 
+            // Pre-create the recording bar window (hidden) so showing it later
+            // doesn't activate the app or steal focus from the user's current app.
+            if let Err(e) = commands::recording::create_recording_bar(&app_handle) {
+                log::error!("Failed to pre-create recording bar: {}", e);
+            }
+
             // Register global hotkey for push-to-talk
             if let Err(e) = system::hotkey::register_hotkey(&app_handle) {
                 log::error!("Failed to register global hotkey: {:?}", e);
@@ -50,6 +59,25 @@ pub fn run() {
 
             log::info!("SobottaAI started successfully");
             Ok(())
+        })
+        // Intercept window close: hide instead of destroying the window.
+        // This lets the app keep running in the system tray.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+
+                    // macOS: hide dock icon when the main window is hidden
+                    #[cfg(target_os = "macos")]
+                    {
+                        let app = window.app_handle();
+                        let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                    }
+
+                    log::info!("Main window hidden to tray");
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             // Recording
@@ -80,6 +108,8 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::save_settings,
             commands::settings::update_hotkey,
+            commands::settings::update_recording_mode,
+            commands::settings::sync_tray,
             // Vocabulary
             commands::vocabulary::get_vocabulary,
             commands::vocabulary::add_term,
@@ -89,6 +119,13 @@ pub fn run() {
             // Audio Import
             commands::audio_import::import_audio_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            // Prevent the app from exiting when all windows are hidden.
+            // The app lives in the system tray — only "Quit" should kill it.
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                api.prevent_exit();
+            }
+        });
 }

@@ -11,43 +11,52 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - platform: macos-14
             target: aarch64-apple-darwin
-          - os: macos-13
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-14
             target: x86_64-apple-darwin
-          - os: ubuntu-latest
+            args: "--target x86_64-apple-darwin"
+          - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
+            args: ""
+          - platform: windows-latest
             target: x86_64-pc-windows-msvc
+            args: ""
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      # Linux dependencies
       - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -57,16 +66,205 @@ jobs:
             patchelf \
             libasound2-dev
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install Apple certificate
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-      - name: Build Tauri app
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_BASE64 || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ startsWith(matrix.platform, 'macos') && 'Developer ID Application' || '' }}
+          APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "SobottaAI ${{ github.ref_name }}"
-          releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          tagName: v__VERSION__
+          releaseName: "SobottaAI v__VERSION__"
+          releaseBody: ""
+          generateReleaseNotes: true
+          args: ${{ matrix.args }}
+
+      - name: Cleanup keychain
+        if: startsWith(matrix.platform, 'macos') && always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+
+  publish-update-manifest:
+    name: Publish update manifest
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download release assets and build merged latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          REPO="dotyigit/sobottaai"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+
+          mkdir -p assets
+          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "*.sig" || true
+          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "latest.json" || true
+
+          # Read signatures
+          DARWIN_AARCH64_SIG=""
+          DARWIN_X86_64_SIG=""
+          LINUX_X86_64_SIG=""
+          WINDOWS_X86_64_SIG=""
+
+          for f in assets/*.sig; do
+            [ -f "$f" ] || continue
+            SIG=$(cat "$f")
+            BASENAME=$(basename "$f")
+            case "$BASENAME" in
+              *aarch64.app.tar.gz.sig)   DARWIN_AARCH64_SIG="$SIG" ;;
+              *x64.app.tar.gz.sig)       DARWIN_X86_64_SIG="$SIG" ;;
+              *amd64.AppImage.tar.gz.sig) LINUX_X86_64_SIG="$SIG" ;;
+              *x64-setup.nsis.zip.sig)   WINDOWS_X86_64_SIG="$SIG" ;;
+            esac
+          done
+
+          # Build merged latest.json
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > latest.json <<EOJSON
+          {
+            "version": "${VERSION}",
+            "notes": "See https://github.com/${REPO}/releases/tag/${TAG}",
+            "pub_date": "${NOW}",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${DARWIN_AARCH64_SIG}",
+                "url": "${BASE_URL}/SobottaAI_aarch64.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${DARWIN_X86_64_SIG}",
+                "url": "${BASE_URL}/SobottaAI_x64.app.tar.gz"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_X86_64_SIG}",
+                "url": "${BASE_URL}/SobottaAI_${VERSION}_amd64.AppImage.tar.gz"
+              },
+              "windows-x86_64": {
+                "signature": "${WINDOWS_X86_64_SIG}",
+                "url": "${BASE_URL}/SobottaAI_${VERSION}_x64-setup.nsis.zip"
+              }
+            }
+          }
+          EOJSON
+
+      - name: Upload merged latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          REPO="dotyigit/sobottaai"
+          gh release delete-asset "$TAG" latest.json --repo "$REPO" --yes 2>/dev/null || true
+          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
+
+  update-homebrew:
+    name: Update Homebrew cask
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew cask
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          REPO="dotyigit/sobottaai"
+
+          # Download the aarch64 DMG to compute its SHA256
+          mkdir -p assets
+          gh release download "$TAG" --repo "$REPO" --dir assets --pattern "*aarch64.dmg" || true
+
+          DMG_FILE=$(ls assets/*aarch64.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG_FILE" ]; then
+            echo "No aarch64 DMG found — skipping Homebrew update"
+            exit 0
+          fi
+
+          SHA256=$(sha256sum "$DMG_FILE" | awk '{print $1}')
+          echo "DMG SHA256: $SHA256"
+
+          # Clone the tap and write the cask formula
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/dotyigit/homebrew-tap.git" \
+            homebrew-tap
+
+          mkdir -p homebrew-tap/Casks
+
+          cat > homebrew-tap/Casks/sobottaai.rb <<EORUBY
+          cask "sobottaai" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/dotyigit/sobottaai/releases/download/v#{version}/SobottaAI_#{version}_aarch64.dmg"
+            name "SobottaAI"
+            desc "Open-source cross-platform voice-to-text with local AI"
+            homepage "https://github.com/dotyigit/sobottaai"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            auto_updates true
+            depends_on macos: ">= :ventura"
+
+            app "SobottaAI.app"
+
+            zap trash: [
+              "~/Library/Application Support/ai.sobotta.app",
+              "~/Library/Preferences/ai.sobotta.app.plist",
+              "~/Library/Caches/ai.sobotta.app",
+            ]
+          end
+          EORUBY
+
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/sobottaai.rb
+          git commit -m "Update sobottaai to ${VERSION}"
+          git push

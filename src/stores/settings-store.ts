@@ -82,10 +82,25 @@ async function setAutostart(enabled: boolean) {
   }
 }
 
-async function updateHotkeyBackend(hotkey: string) {
+async function updateHotkeyBackend(hotkey: string): Promise<boolean> {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("update_hotkey", { hotkey });
+    return true;
+  } catch (err) {
+    console.error("Failed to update hotkey:", err);
+    // Show error via dynamic import to avoid circular deps
+    import("sonner").then(({ toast }) => {
+      toast.error("Failed to set hotkey", { description: String(err) });
+    }).catch(() => {});
+    return false;
+  }
+}
+
+async function updateRecordingModeBackend(mode: string) {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("update_recording_mode", { mode });
   } catch {
     // Outside Tauri context
   }
@@ -99,9 +114,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   rules: [
     { id: "remove-fillers", name: "Remove Filler Words", enabled: false },
     { id: "smart-punctuation", name: "Smart Punctuation", enabled: false },
-    { id: "fix-grammar", name: "Fix Grammar", enabled: false },
   ],
-  defaultHotkey: "CommandOrControl+Shift+Space",
+  defaultHotkey: "Alt+Space",
   theme: "system",
   launchAtLogin: false,
   llmProvider: "openai",
@@ -137,6 +151,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
   setRecordingMode: (mode) => {
     set({ recordingMode: mode });
+    updateRecordingModeBackend(mode);
     persistSettings(get());
   },
   toggleRule: (ruleId) => {
@@ -205,12 +220,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           selectedLanguage: (data.selectedLanguage as string) ?? "auto",
           selectedAiFunction: (data.selectedAiFunction as string | null) ?? null,
           recordingMode: (data.recordingMode as "push-to-talk" | "toggle") ?? "push-to-talk",
-          rules: (data.rules as Rule[]) ?? [
+          rules: ((data.rules as Rule[]) ?? [
             { id: "remove-fillers", name: "Remove Filler Words", enabled: false },
             { id: "smart-punctuation", name: "Smart Punctuation", enabled: false },
-            { id: "fix-grammar", name: "Fix Grammar", enabled: false },
-          ],
-          defaultHotkey: (data.defaultHotkey as string) ?? "CommandOrControl+Shift+Space",
+          ]).filter((r) => r.id !== "fix-grammar"),
+          defaultHotkey: (data.defaultHotkey as string) ?? "Alt+Space",
           theme: (data.theme as "light" | "dark" | "system") ?? "system",
           launchAtLogin: (data.launchAtLogin as boolean) ?? false,
           llmProvider: (data.llmProvider as string) ?? "openai",
@@ -218,6 +232,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           onboardingComplete: (data.onboardingComplete as boolean) ?? false,
           _hydrated: true,
         });
+
+        // Sync saved settings to the backend on startup
+        const savedHotkey = (data.defaultHotkey as string) ?? "Alt+Space";
+        const savedMode = (data.recordingMode as string) ?? "push-to-talk";
+        updateHotkeyBackend(savedHotkey);
+        updateRecordingModeBackend(savedMode);
+        setAutostart((data.launchAtLogin as boolean) ?? false);
       } else {
         set({ _hydrated: true });
       }

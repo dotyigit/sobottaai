@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Search, Trash2, Clock, Mic } from "lucide-react";
+import { Search, Trash2, Clock, Mic, Copy, Check } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AppShell } from "@/components/app-shell";
 
 interface HistoryItem {
   id: string;
@@ -25,8 +26,29 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
   return invoke<T>(cmd, args);
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? (
+        <Check className="h-4 w-4 text-green-500" />
+      ) : (
+        <Copy className="h-4 w-4" />
+      )}
+    </Button>
+  );
+}
+
 export default function HistoryPage() {
-  const router = useRouter();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -39,7 +61,7 @@ export default function HistoryPage() {
         offset: 0,
       });
       setItems(result);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load history");
     } finally {
       setLoading(false);
@@ -57,7 +79,7 @@ export default function HistoryPage() {
         query,
       });
       setItems(result);
-    } catch (err) {
+    } catch {
       toast.error("Failed to search history");
     } finally {
       setLoading(false);
@@ -68,7 +90,7 @@ export default function HistoryPage() {
     try {
       await tauriInvoke("delete_history_item", { id });
       setItems((prev) => prev.filter((item) => item.id !== id));
-    } catch (err) {
+    } catch {
       toast.error("Failed to delete item");
     }
   }, []);
@@ -94,7 +116,12 @@ export default function HistoryPage() {
 
   function formatDate(dateStr: string): string {
     try {
-      const date = new Date(dateStr);
+      // SQLite CURRENT_TIMESTAMP is UTC but lacks a timezone suffix —
+      // append "Z" so JavaScript parses it correctly as UTC.
+      const normalized = dateStr.includes("T") || dateStr.endsWith("Z")
+        ? dateStr
+        : dateStr.replace(" ", "T") + "Z";
+      const date = new Date(normalized);
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);
@@ -112,88 +139,114 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 border-b px-6 py-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/")}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-xl font-bold">Recording History</h1>
-        {items.length > 0 && (
-          <span className="text-sm text-muted-foreground">
-            ({items.length})
-          </span>
-        )}
-      </header>
+    <AppShell>
+      <div className="flex h-full flex-col">
+        <div className="px-6 pt-4 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-lg font-semibold">History</h1>
+              {items.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {items.length} recording{items.length !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search transcriptions..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
 
-      <div className="p-6 pb-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search transcriptions..."
-            className="pl-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex-1 min-h-0">
+          <ScrollArea className="h-full">
+            <div className="px-6 py-4">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <p>Loading...</p>
+                </div>
+              ) : items.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center justify-center py-16 text-muted-foreground"
+                >
+                  <Mic className="h-8 w-8 mb-3 opacity-50" />
+                  <p>{searchQuery ? "No matching transcriptions" : "No recordings yet"}</p>
+                  <p className="text-sm">
+                    {searchQuery
+                      ? "Try a different search term"
+                      : "Your transcriptions will appear here"}
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    hidden: {},
+                    visible: { transition: { staggerChildren: 0.04 } },
+                  }}
+                  className="space-y-2"
+                >
+                  <AnimatePresence>
+                    {items.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        variants={{
+                          hidden: { opacity: 0, y: 8 },
+                          visible: { opacity: 1, y: 0 },
+                        }}
+                        exit={{ opacity: 0, x: -20, height: 0 }}
+                        layout
+                        className="group rounded-lg border border-border/50 p-4 transition-colors hover:bg-muted/30"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm leading-relaxed">
+                              {item.processedText || item.transcript}
+                            </p>
+                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                              <span>{formatDate(item.createdAt)}</span>
+                              {item.durationMs && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {formatDuration(item.durationMs)}
+                                </span>
+                              )}
+                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                                {item.modelId.replace("whisper-", "").replace("parakeet-", "")}
+                              </span>
+                              {item.language && (
+                                <span className="uppercase">{item.language}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <CopyButton text={item.processedText || item.transcript} />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteItem(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </div>
+          </ScrollArea>
         </div>
       </div>
-
-      <ScrollArea className="flex-1 px-6 py-4">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <p>Loading...</p>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Mic className="h-8 w-8 mb-3 opacity-50" />
-            <p>{searchQuery ? "No matching transcriptions" : "No recordings yet"}</p>
-            <p className="text-sm">
-              {searchQuery
-                ? "Try a different search term"
-                : "Your transcriptions will appear here"}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="group rounded-lg border p-4 transition-colors hover:bg-muted/50"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-relaxed">
-                      {item.processedText || item.transcript}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <span>{formatDate(item.createdAt)}</span>
-                      {item.durationMs && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatDuration(item.durationMs)}
-                        </span>
-                      )}
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                        {item.modelId.replace("whisper-", "").replace("parakeet-", "")}
-                      </span>
-                      {item.language && (
-                        <span className="uppercase">{item.language}</span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    onClick={() => deleteItem(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
-    </div>
+    </AppShell>
   );
 }

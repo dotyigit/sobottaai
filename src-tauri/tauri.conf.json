@@ -19,7 +19,8 @@
         "height": 650,
         "center": true,
         "resizable": true,
-        "decorations": true
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {
@@ -29,12 +30,30 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "public.app-category.productivity",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "entitlements": "Entitlements.plist",
+      "frameworks": [
+        "target/release/libonnxruntime.1.17.1.dylib",
+        "target/release/libsherpa-onnx-c-api.dylib"
+      ]
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3ODFBQTY2MkZGNUI4NDEKUldSQnVQVXZacXFCbDQ5NFhZelhDYTMxQkZhaW1JcURaNEFxNytUQ2RvQlBPcm1jQ1dBTDVNR1oK",
+      "endpoints": [
+        "https://github.com/dotyigit/sobottaai/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

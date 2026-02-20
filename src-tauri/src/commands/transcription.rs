@@ -1,5 +1,6 @@
 use crate::commands::recording::{self, RecordingState};
 use crate::models;
+use crate::stt::parakeet::ParakeetEngine;
 use crate::stt::whisper::WhisperEngine;
 use crate::stt::{SttEngine, TranscriptionOptions, TranscriptionResult};
 use std::collections::HashMap;
@@ -56,9 +57,9 @@ impl SttManager {
                 Arc::new(whisper)
             }
             models::Engine::Parakeet => {
-                return Err(
-                    "Parakeet engine not yet implemented. Please use a Whisper model.".into(),
-                );
+                let parakeet = ParakeetEngine::new(&model_dir)
+                    .map_err(|e| format!("Failed to load Parakeet model: {}", e))?;
+                Arc::new(parakeet)
             }
             models::Engine::CloudOpenAI | models::Engine::CloudGroq => {
                 return Err("Cloud models should not be loaded as local engines".into());
@@ -101,6 +102,20 @@ pub async fn transcribe(
 
     if audio.is_empty() {
         return Err("No audio data in session".into());
+    }
+
+    // Skip transcription if the audio is essentially silence / background noise.
+    // This prevents Whisper from hallucinating phrases like "Thank you" on quiet input.
+    let rms = crate::audio::processing::rms_energy(&audio);
+    log::info!("Audio RMS energy: {:.6} ({} samples)", rms, audio.len());
+    if rms < 0.01 {
+        log::info!("Audio is silence (RMS {:.6} < 0.01), skipping transcription", rms);
+        return Ok(TranscriptionResult {
+            text: String::new(),
+            language: None,
+            segments: vec![],
+            duration_ms: 0,
+        });
     }
 
     // Load vocabulary terms from database to improve transcription accuracy

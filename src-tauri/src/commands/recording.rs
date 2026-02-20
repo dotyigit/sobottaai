@@ -13,6 +13,8 @@ pub struct RecordingState {
     sessions: Mutex<HashMap<String, Vec<f32>>>,
     /// Signal to stop the capture thread.
     stop_signal: Mutex<Option<std::sync::mpsc::Sender<()>>>,
+    /// Signal to stop the audio level meter thread.
+    level_stop: Mutex<Option<std::sync::mpsc::Sender<()>>>,
 }
 
 impl RecordingState {
@@ -21,7 +23,13 @@ impl RecordingState {
             buffer: Mutex::new(None),
             sessions: Mutex::new(HashMap::new()),
             stop_signal: Mutex::new(None),
+            level_stop: Mutex::new(None),
         }
+    }
+
+    /// Check if a recording is currently active.
+    pub fn is_recording(&self) -> bool {
+        self.stop_signal.lock().unwrap().is_some()
     }
 }
 
@@ -34,10 +42,7 @@ pub struct StopResult {
 }
 
 #[tauri::command]
-pub fn start_recording(
-    app: AppHandle,
-    state: State<'_, RecordingState>,
-) -> Result<(), String> {
+pub fn start_recording(app: AppHandle, state: State<'_, RecordingState>) -> Result<(), String> {
     // Prevent double-start
     if state.stop_signal.lock().unwrap().is_some() {
         return Err("Recording already in progress".into());
@@ -139,10 +144,24 @@ pub fn start_recording(
     });
 
     // Wait for capture thread initialization
-    let (sample_rate, channels) = init_rx
+    let init_result = init_rx
         .recv()
-        .map_err(|_| "Capture thread died before initialization")?
-        .map_err(|e| format!("Audio init failed: {}", e))?;
+        .map_err(|_| "Capture thread died before initialization".to_string())
+        .and_then(|r| r.map_err(|e| format!("Audio init failed: {}", e)));
+
+    let (sample_rate, channels) = match init_result {
+        Ok(v) => v,
+        Err(e) => {
+            // Clean up stop_signal so is_recording() returns false
+            // and the app doesn't get stuck in a bad state
+            *state.stop_signal.lock().unwrap() = None;
+            *state.level_stop.lock().unwrap() = None;
+            return Err(e);
+        }
+    };
+
+    // Clone the samples Arc for the level meter before moving into state
+    let level_samples = shared_buffer.samples.clone();
 
     // Store the buffer (with correct metadata) in state.
     // shared_buffer.samples is the same Arc the capture thread writes to.
@@ -158,6 +177,38 @@ pub fn start_recording(
     // Emit event so frontend knows recording started
     let _ = app.emit("recording-started", ());
 
+    // Spawn audio level meter thread — emits RMS level ~16 times per second
+    {
+        let (level_tx, level_rx) = std::sync::mpsc::channel::<()>();
+        *state.level_stop.lock().unwrap() = Some(level_tx);
+
+        let level_app = app.clone();
+        std::thread::spawn(move || {
+            loop {
+                if level_rx.try_recv().is_ok() {
+                    break;
+                }
+
+                let level = {
+                    let buf = level_samples.lock().unwrap();
+                    let len = buf.len();
+                    if len == 0 {
+                        0.0f32
+                    } else {
+                        // RMS of the most recent ~4096 samples (~85ms at 48kHz)
+                        let window = 4096.min(len);
+                        let start = len - window;
+                        let chunk = &buf[start..len];
+                        (chunk.iter().map(|s| s * s).sum::<f32>() / chunk.len() as f32).sqrt()
+                    }
+                };
+
+                let _ = level_app.emit("audio-level", level);
+                std::thread::sleep(std::time::Duration::from_millis(60));
+            }
+        });
+    }
+
     log::info!(
         "Recording started: {}Hz, {} channels",
         sample_rate,
@@ -171,6 +222,11 @@ pub fn stop_recording(
     app: AppHandle,
     state: State<'_, RecordingState>,
 ) -> Result<StopResult, String> {
+    // Stop the audio level meter thread
+    if let Some(tx) = state.level_stop.lock().unwrap().take() {
+        let _ = tx.send(());
+    }
+
     // Signal the capture thread to stop
     let had_signal = state.stop_signal.lock().unwrap().take().map(|tx| {
         let _ = tx.send(());
@@ -247,35 +303,68 @@ pub fn stop_recording(
     Ok(result)
 }
 
-#[tauri::command]
-pub fn show_recording_bar(app: AppHandle) -> Result<(), String> {
+/// Create the recording bar window (hidden) at startup so showing it later
+/// doesn't activate the app or steal focus.
+pub fn create_recording_bar(app: &AppHandle) -> Result<(), String> {
     if app.get_webview_window("recording-bar").is_some() {
         return Ok(());
     }
 
-    WebviewWindowBuilder::new(
-        &app,
+    let bar_width = 250.0_f64;
+    let bar_height = 44.0_f64;
+    let margin_bottom = 32.0_f64;
+
+    let mut builder = WebviewWindowBuilder::new(
+        app,
         "recording-bar",
         WebviewUrl::App("/recording-bar".into()),
     )
     .title("Recording")
-    .inner_size(360.0, 64.0)
+    .inner_size(bar_width, bar_height)
     .always_on_top(true)
     .decorations(false)
-    .transparent(false)
+    .transparent(true)
+    .shadow(false)
     .resizable(false)
     .skip_taskbar(true)
-    .center()
-    .build()
-    .map_err(|e| e.to_string())?;
+    .focused(false)
+    .visible(false);
 
+    // Position at bottom-center of primary monitor
+    if let Some(monitor) = app.primary_monitor().ok().flatten() {
+        let screen_size = monitor.size();
+        let scale = monitor.scale_factor();
+        let logical_w = screen_size.width as f64 / scale;
+        let logical_h = screen_size.height as f64 / scale;
+        let x = (logical_w - bar_width) / 2.0;
+        let y = logical_h - bar_height - margin_bottom;
+        builder = builder.position(x, y);
+    } else {
+        builder = builder.center();
+    }
+
+    let window = builder.build().map_err(|e| e.to_string())?;
+
+    // Start hidden
+    let _ = window.hide();
+    log::info!("Recording bar window pre-created (hidden)");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn show_recording_bar(app: AppHandle) -> Result<(), String> {
+    log::info!("show_recording_bar: called");
+    if let Some(window) = app.get_webview_window("recording-bar") {
+        let _ = window.show();
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub fn hide_recording_bar(app: AppHandle) -> Result<(), String> {
+    log::info!("hide_recording_bar: called");
     if let Some(window) = app.get_webview_window("recording-bar") {
-        let _ = window.close();
+        let _ = window.hide();
     }
     Ok(())
 }

@@ -44,7 +44,7 @@ export function AiFunctionPicker() {
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select function" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper" className="max-h-60">
         <SelectItem value="none">None</SelectItem>
         {functions.map((fn) => (
           <SelectItem key={fn.id} value={fn.id}>

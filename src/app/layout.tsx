@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
+import { TraySync } from "@/components/tray-sync";
+import { RecordingPipeline } from "@/components/recording-pipeline";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,6 +34,8 @@ export default function RootLayout({
       >
         <TooltipProvider>
           <ThemeSync />
+          <TraySync />
+          <RecordingPipeline />
           {children}
           <Toaster />
         </TooltipProvider>
