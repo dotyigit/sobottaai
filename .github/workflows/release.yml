@@ -90,6 +90,37 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare sherpa-onnx Windows libs
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $archiveName = "sherpa-onnx-v1.12.9-win-x64-shared.tar.bz2"
+          $archiveUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.9/$archiveName"
+          $archivePath = Join-Path $env:RUNNER_TEMP $archiveName
+          $extractDir = Join-Path $env:RUNNER_TEMP "sherpa-win-extract"
+          $targetDir = Join-Path $env:GITHUB_WORKSPACE "src-tauri\vendor\sherpa-win"
+
+          Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $extractDir | Out-Null
+          New-Item -ItemType Directory -Path $targetDir | Out-Null
+
+          Invoke-WebRequest -Uri $archiveUrl -OutFile $archivePath
+          tar -xjf $archivePath -C $extractDir
+
+          $root = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+          if (-not $root) {
+            throw "Failed to extract sherpa-onnx archive"
+          }
+
+          Copy-Item -Path (Join-Path $root.FullName "*") -Destination $targetDir -Recurse -Force
+
+          if (!(Test-Path (Join-Path $targetDir "lib\sherpa-onnx-c-api.lib"))) {
+            throw "sherpa-onnx-c-api.lib not found after extraction"
+          }
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -102,6 +133,7 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
+          SHERPA_LIB_PATH: ${{ matrix.platform == 'windows-latest' && format('{0}/src-tauri/vendor/sherpa-win', github.workspace) || '' }}
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
