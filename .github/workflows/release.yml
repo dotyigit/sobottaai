@@ -90,6 +90,27 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare sherpa-onnx macOS dylibs
+        if: startsWith(matrix.platform, 'macos')
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE="sherpa-onnx-v1.12.9-osx-universal2-shared.tar.bz2"
+          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.12.9/${ARCHIVE}"
+          TMP_DIR="${RUNNER_TEMP}/sherpa-macos"
+          EXTRACTED_DIR="${TMP_DIR}/sherpa-onnx-v1.12.9-osx-universal2-shared"
+          TARGET_DIR="${GITHUB_WORKSPACE}/src-tauri/dylibs"
+
+          rm -rf "${TMP_DIR}"
+          mkdir -p "${TMP_DIR}" "${TARGET_DIR}"
+
+          curl -L --fail "${URL}" -o "${TMP_DIR}/${ARCHIVE}"
+          tar -xjf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
+
+          cp "${EXTRACTED_DIR}/lib/libonnxruntime.1.17.1.dylib" "${TARGET_DIR}/"
+          cp "${EXTRACTED_DIR}/lib/libsherpa-onnx-c-api.dylib" "${TARGET_DIR}/"
+
       - name: Prepare sherpa-onnx Windows libs
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -133,7 +154,7 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
-          SHERPA_LIB_PATH: ${{ matrix.platform == 'windows-latest' && format('{0}/src-tauri/vendor/sherpa-win', github.workspace) || '' }}
+          RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && format('-L native={0}/src-tauri/vendor/sherpa-win/lib', github.workspace) || '' }}
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
