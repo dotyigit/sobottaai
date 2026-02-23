@@ -174,6 +174,39 @@ jobs:
           Write-Host "Found runtime DLLs in $dllDir\"
           Get-ChildItem (Join-Path $targetDir $dllDir) -Filter "*.dll" | ForEach-Object { Write-Host "  $_" }
 
+      - name: Copy DLLs to src-tauri for NSIS bundling
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vendorDir = Join-Path $env:GITHUB_WORKSPACE "src-tauri\vendor\sherpa-win"
+          $tauriDir = Join-Path $env:GITHUB_WORKSPACE "src-tauri"
+
+          # Find DLL directory (lib/ or bin/)
+          $dllDir = if (Test-Path (Join-Path $vendorDir "lib\sherpa-onnx-c-api.dll")) { "lib" } `
+                    elseif (Test-Path (Join-Path $vendorDir "bin\sherpa-onnx-c-api.dll")) { "bin" } `
+                    else { $null }
+          if (-not $dllDir) {
+            throw "Cannot find DLLs in vendor directory"
+          }
+
+          $srcDir = Join-Path $vendorDir $dllDir
+          $requiredDlls = @("sherpa-onnx-c-api.dll", "onnxruntime.dll", "onnxruntime_providers_shared.dll")
+
+          foreach ($dll in $requiredDlls) {
+            $src = Join-Path $srcDir $dll
+            $dst = Join-Path $tauriDir $dll
+            if (Test-Path $src) {
+              Copy-Item $src $dst -Force
+              Write-Host "Copied $dll to src-tauri/"
+            } else {
+              throw "Required DLL not found: $src"
+            }
+          }
+
+          Write-Host "`nDLLs in src-tauri/:"
+          Get-ChildItem $tauriDir -Filter "*.dll" | ForEach-Object { Write-Host "  $($_.Name) ($([math]::Round($_.Length/1MB, 1)) MB)" }
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -187,7 +220,6 @@ jobs:
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
           RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && format('-L native={0}/src-tauri/vendor/sherpa-win/lib', github.workspace) || matrix.platform == 'ubuntu-22.04' && format('-L native={0}/src-tauri/vendor/sherpa-linux/lib', github.workspace) || startsWith(matrix.platform, 'macos') && format('-L native={0}/src-tauri/dylibs', github.workspace) || '' }}
-          TAURI_CONFIG: ${{ matrix.platform == 'windows-latest' && '{"bundle":{"resources":["sherpa-onnx-c-api.dll","onnxruntime.dll"]}}' || '{}' }}
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"

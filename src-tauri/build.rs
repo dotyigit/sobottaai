@@ -75,7 +75,11 @@ fn main() {
     {
         let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
         let profile = std::env::var("PROFILE").unwrap();
-        let dll_names = ["onnxruntime.dll", "sherpa-onnx-c-api.dll"];
+        let dll_names = [
+            "onnxruntime.dll",
+            "onnxruntime_providers_shared.dll",
+            "sherpa-onnx-c-api.dll",
+        ];
 
         // Walk up from OUT_DIR to find the target profile directory.
         let mut target_dir = None;
