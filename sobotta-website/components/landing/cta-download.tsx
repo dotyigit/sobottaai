@@ -96,7 +96,7 @@ export function CtaDownload() {
         <AnimatedSection delay={0.35}>
           <div className="mt-8 flex flex-col items-center gap-2">
             <span className="inline-flex rounded-full border border-border/50 bg-secondary/40 px-3 py-1 font-mono text-xs text-muted-foreground">
-              v0.1.8 — Early Access
+              v0.1.9 — Early Access
             </span>
             <p className="text-xs text-muted-foreground/70">
               Requires macOS 15+, Windows 10+, or Ubuntu 22.04+
