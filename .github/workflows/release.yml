@@ -152,8 +152,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $srcDir = Join-Path $env:RUNNER_TEMP "sherpa-onnx-src"
-          $buildDir = Join-Path $env:RUNNER_TEMP "sherpa-onnx-directml"
+          $srcDir = "$env:RUNNER_TEMP/sherpa-onnx-src" -replace '\\','/'
+          $buildDir = "$env:RUNNER_TEMP/sherpa-onnx-directml" -replace '\\','/'
+          $installDir = "$buildDir/install"
 
           Write-Host "Cloning sherpa-onnx v1.12.9..."
           git clone --depth 1 --branch v1.12.9 https://github.com/k2-fsa/sherpa-onnx.git $srcDir
@@ -168,17 +169,17 @@ jobs:
             -DSHERPA_ONNX_ENABLE_TTS=OFF `
             -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF `
             -DSHERPA_ONNX_USE_STATIC_CRT=OFF `
-            -DCMAKE_INSTALL_PREFIX="$buildDir/install"
+            -DCMAKE_INSTALL_PREFIX="$installDir"
 
           Write-Host "Building..."
-          cmake --build $buildDir --config Release -- -m:2
+          cmake --build $buildDir --config Release
 
           Write-Host "Installing..."
-          cmake --build $buildDir --config Release --target install -- -m:2
+          cmake --build $buildDir --config Release --target install
 
           Write-Host "`nInstalled files:"
-          Get-ChildItem "$buildDir/install" -Recurse -File | ForEach-Object {
-            Write-Host "  $($_.FullName.Replace("$buildDir/install", '')) ($([math]::Round($_.Length/1MB, 1)) MB)"
+          Get-ChildItem "$installDir" -Recurse -File | ForEach-Object {
+            Write-Host "  $($_.FullName.Replace($installDir, '')) ($([math]::Round($_.Length/1MB, 1)) MB)"
           }
 
       - name: Prepare sherpa-onnx Windows vendor dir
