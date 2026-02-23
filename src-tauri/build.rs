@@ -67,10 +67,104 @@ fn main() {
         }
     }
 
+    // Windows: copy sherpa-onnx DLLs to a fixed `dlls/` directory so
+    // `bundle.resources` in tauri.conf.json can include them in the NSIS
+    // installer (placed next to the exe).
+    #[cfg(target_os = "windows")]
+    {
+        let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let profile = std::env::var("PROFILE").unwrap();
+        let dll_names = ["onnxruntime.dll", "sherpa-onnx-c-api.dll"];
+
+        // Walk up from OUT_DIR to find the target profile directory.
+        let mut target_dir = None;
+        let mut sub_path = out_dir.as_path();
+        while let Some(parent) = sub_path.parent() {
+            if parent.ends_with(&profile) {
+                target_dir = Some(parent.to_path_buf());
+                break;
+            }
+            sub_path = parent;
+        }
+
+        let dlls_dir = std::path::Path::new("dlls");
+        let _ = std::fs::create_dir_all(dlls_dir);
+
+        // Primary: CI vendor directory (populated by release workflow).
+        // DLLs may be in lib/ or bin/ depending on the sherpa-onnx archive layout.
+        let vendor_dirs = [
+            std::path::Path::new("vendor/sherpa-win/lib"),
+            std::path::Path::new("vendor/sherpa-win/bin"),
+        ];
+        for vendor_dir in &vendor_dirs {
+            if vendor_dir.exists() {
+                for dll in &dll_names {
+                    let dst = dlls_dir.join(dll);
+                    if dst.exists() {
+                        continue;
+                    }
+                    let src = vendor_dir.join(dll);
+                    if src.exists() {
+                        let _ = std::fs::copy(&src, &dst);
+                    }
+                }
+            }
+        }
+
+        // Secondary: target profile dir populated by sherpa-rs-sys.
+        if let Some(ref target_dir) = target_dir {
+            for dll in &dll_names {
+                let dst = dlls_dir.join(dll);
+                if dst.exists() {
+                    continue;
+                }
+                let src = target_dir.join(dll);
+                if src.exists() {
+                    let _ = std::fs::copy(&src, &dst);
+                }
+            }
+        }
+
+        // Fallback: sherpa-rs download cache in LOCALAPPDATA or USERPROFILE.
+        let cache_roots: Vec<std::path::PathBuf> = [
+            std::env::var_os("LOCALAPPDATA"),
+            std::env::var_os("USERPROFILE"),
+        ]
+        .iter()
+        .flatten()
+        .map(|base| {
+            std::path::PathBuf::from(base)
+                .join(".cache")
+                .join("sherpa-rs")
+        })
+        .filter(|p| p.exists())
+        .collect();
+
+        for dll in &dll_names {
+            let dst = dlls_dir.join(dll);
+            if dst.exists() {
+                continue;
+            }
+            for root in &cache_roots {
+                if let Some(src) = find_file_recursive(root, dll) {
+                    let _ = std::fs::copy(&src, &dst);
+                    break;
+                }
+            }
+        }
+
+        for dll in &dll_names {
+            let dst = dlls_dir.join(dll);
+            if !dst.exists() {
+                println!("cargo:warning=Missing required Windows DLL: {}", dll);
+            }
+        }
+    }
+
     tauri_build::build()
 }
 
-#[cfg(target_os = "macos")]
+#[allow(dead_code)]
 fn find_file_recursive(dir: &std::path::Path, filename: &str) -> Option<std::path::PathBuf> {
     let entries = std::fs::read_dir(dir).ok()?;
     for entry in entries.flatten() {

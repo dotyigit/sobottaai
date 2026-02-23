@@ -164,6 +164,16 @@ jobs:
             throw "sherpa-onnx-c-api.lib not found after extraction"
           }
 
+          # Verify runtime DLLs are present (needed for NSIS bundling)
+          $dllDir = if (Test-Path (Join-Path $targetDir "lib\sherpa-onnx-c-api.dll")) { "lib" } `
+                    elseif (Test-Path (Join-Path $targetDir "bin\sherpa-onnx-c-api.dll")) { "bin" } `
+                    else { $null }
+          if (-not $dllDir) {
+            throw "sherpa-onnx-c-api.dll not found in lib\ or bin\ after extraction"
+          }
+          Write-Host "Found runtime DLLs in $dllDir\"
+          Get-ChildItem (Join-Path $targetDir $dllDir) -Filter "*.dll" | ForEach-Object { Write-Host "  $_" }
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -177,6 +187,7 @@ jobs:
           APPLE_PASSWORD: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_ID_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
           RUSTFLAGS: ${{ matrix.platform == 'windows-latest' && format('-L native={0}/src-tauri/vendor/sherpa-win/lib', github.workspace) || matrix.platform == 'ubuntu-22.04' && format('-L native={0}/src-tauri/vendor/sherpa-linux/lib', github.workspace) || startsWith(matrix.platform, 'macos') && format('-L native={0}/src-tauri/dylibs', github.workspace) || '' }}
+          TAURI_CONFIG: ${{ matrix.platform == 'windows-latest' && '{"bundle":{"resources":["dlls/*"]}}' || '' }}
         with:
           tagName: v__VERSION__
           releaseName: "SobottaAI v__VERSION__"
