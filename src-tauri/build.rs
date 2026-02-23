@@ -79,6 +79,7 @@ fn main() {
             "onnxruntime.dll",
             "onnxruntime_providers_shared.dll",
             "sherpa-onnx-c-api.dll",
+            "DirectML.dll",
         ];
 
         // Walk up from OUT_DIR to find the target profile directory.

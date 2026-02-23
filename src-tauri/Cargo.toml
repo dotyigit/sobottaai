@@ -35,8 +35,8 @@ hound = "3.5"
 # Keyboard simulation for auto-paste
 enigo = "0.3"
 
-# Speech-to-text: sherpa-onnx transducer (Parakeet models)
-sherpa-rs = { version = "0.6", features = ["download-binaries"] }
+# Speech-to-text: sherpa-onnx transducer (Parakeet & Whisper ONNX models)
+# Platform-specific features are set below in [target] sections.
 
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -66,6 +66,14 @@ async-trait = "0.1"
 # Speech-to-text: Metal GPU acceleration on macOS, plain CPU elsewhere
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.15", features = ["metal"] }
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
+[target.'cfg(target_os = "windows")'.dependencies]
 whisper-rs = "0.15"
+# DirectML: GPU acceleration on all Windows GPUs (NVIDIA, AMD, Intel)
+# Incompatible with download-binaries — CI builds sherpa-onnx from source
+sherpa-rs = { version = "0.6", default-features = false, features = ["directml"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+whisper-rs = "0.15"
+sherpa-rs = { version = "0.6", features = ["download-binaries"] }

@@ -32,10 +32,12 @@ impl WhisperOnnxEngine {
             .map(|n| n.get().clamp(1, 8) as i32)
             .unwrap_or(4);
 
-        // Use CoreML on macOS for GPU/Neural Engine acceleration, CPU elsewhere
+        // GPU acceleration per platform; falls back to CPU if provider fails
         #[cfg(target_os = "macos")]
         let provider = Some("coreml".to_string());
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        let provider = Some("directml".to_string());
+        #[cfg(target_os = "linux")]
         let provider = None;
 
         let config = WhisperConfig {
