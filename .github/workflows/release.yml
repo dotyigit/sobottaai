@@ -139,7 +139,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/sherpa-onnx-directml
-          key: sherpa-onnx-directml-v1.12.9-win-x64-v1
+          key: sherpa-onnx-directml-v1.12.9-win-x64-v2
 
       - name: Setup MSVC dev environment
         if: matrix.platform == 'windows-latest'
@@ -158,6 +158,14 @@ jobs:
 
           Write-Host "Cloning sherpa-onnx v1.12.9..."
           git clone --depth 1 --branch v1.12.9 https://github.com/k2-fsa/sherpa-onnx.git $srcDir
+
+          # Patch show-info.cmake: wmic is broken on Windows Server 2025 (returns empty output)
+          # which causes string(REPLACE) to fail with "requires at least four arguments"
+          # Download the fixed version from upstream master (uses PowerShell instead of wmic)
+          Write-Host "Patching show-info.cmake (wmic fix from upstream)..."
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/master/cmake/show-info.cmake" `
+            -OutFile "$srcDir/cmake/show-info.cmake"
+          Write-Host "Patched show-info.cmake successfully"
 
           Write-Host "Configuring CMake with DirectML..."
           cmake -S $srcDir -B $buildDir -A x64 `

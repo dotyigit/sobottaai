@@ -35,7 +35,7 @@ export default function SettingsLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [appVersion, setAppVersion] = useState("v0.1.9");
+  const [appVersion, setAppVersion] = useState("v0.1.10");
 
   useEffect(() => {
     let mounted = true;
