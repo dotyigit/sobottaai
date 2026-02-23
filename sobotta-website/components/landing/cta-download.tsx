@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Download, Apple, Monitor, Terminal, Github } from "lucide-react"
+import { Download, Monitor, Terminal, Github } from "lucide-react"
 import { AnimatedSection } from "./animated-section"
 
 export function CtaDownload() {
@@ -96,7 +96,7 @@ export function CtaDownload() {
         <AnimatedSection delay={0.35}>
           <div className="mt-8 flex flex-col items-center gap-2">
             <span className="inline-flex rounded-full border border-border/50 bg-secondary/40 px-3 py-1 font-mono text-xs text-muted-foreground">
-              v0.1.1 — Early Access
+              v0.1.2 — Early Access
             </span>
             <p className="text-xs text-muted-foreground/70">
               Requires macOS 15+, Windows 10+, or Ubuntu 22.04+

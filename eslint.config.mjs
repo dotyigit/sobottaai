@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Sobotta website build artifacts
+    "sobotta-website/.next/**",
+    "sobotta-website/out/**",
     // Rust build artifacts
     "src-tauri/target/**",
   ]),
