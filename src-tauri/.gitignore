@@ -7,4 +7,4 @@
 /dylibs/
 
 # Windows DLLs copied by build.rs for bundling
-/dlls/
+*.dll

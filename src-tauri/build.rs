@@ -67,9 +67,10 @@ fn main() {
         }
     }
 
-    // Windows: copy sherpa-onnx DLLs to a fixed `dlls/` directory so
-    // `bundle.resources` in tauri.conf.json can include them in the NSIS
-    // installer (placed next to the exe).
+    // Windows: copy sherpa-onnx DLLs to the Tauri project root (src-tauri/)
+    // so `bundle.resources` can reference them by filename. This ensures
+    // the NSIS installer places them at $INSTDIR (next to the exe), NOT
+    // in a subdirectory.
     #[cfg(target_os = "windows")]
     {
         let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
@@ -87,8 +88,9 @@ fn main() {
             sub_path = parent;
         }
 
-        let dlls_dir = std::path::Path::new("dlls");
-        let _ = std::fs::create_dir_all(dlls_dir);
+        // Destination: project root (src-tauri/) — files referenced as
+        // bare filenames in bundle.resources land at $INSTDIR.
+        let dst_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
 
         // Primary: CI vendor directory (populated by release workflow).
         // DLLs may be in lib/ or bin/ depending on the sherpa-onnx archive layout.
@@ -99,7 +101,7 @@ fn main() {
         for vendor_dir in &vendor_dirs {
             if vendor_dir.exists() {
                 for dll in &dll_names {
-                    let dst = dlls_dir.join(dll);
+                    let dst = dst_dir.join(dll);
                     if dst.exists() {
                         continue;
                     }
@@ -114,7 +116,7 @@ fn main() {
         // Secondary: target profile dir populated by sherpa-rs-sys.
         if let Some(ref target_dir) = target_dir {
             for dll in &dll_names {
-                let dst = dlls_dir.join(dll);
+                let dst = dst_dir.join(dll);
                 if dst.exists() {
                     continue;
                 }
@@ -141,7 +143,7 @@ fn main() {
         .collect();
 
         for dll in &dll_names {
-            let dst = dlls_dir.join(dll);
+            let dst = dst_dir.join(dll);
             if dst.exists() {
                 continue;
             }
@@ -154,7 +156,7 @@ fn main() {
         }
 
         for dll in &dll_names {
-            let dst = dlls_dir.join(dll);
+            let dst = dst_dir.join(dll);
             if !dst.exists() {
                 println!("cargo:warning=Missing required Windows DLL: {}", dll);
             }
