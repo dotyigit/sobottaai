@@ -61,9 +61,11 @@ function getEngineLabel(engine: string): string {
   if (typeof engine === "string") {
     if (engine === "CloudOpenAI") return "OpenAI";
     if (engine === "CloudGroq") return "Groq";
+    if (engine === "WhisperOnnx") return "Whisper";
     return engine;
   }
   if ("Whisper" in (engine as Record<string, unknown>)) return "Whisper";
+  if ("WhisperOnnx" in (engine as Record<string, unknown>)) return "Whisper";
   if ("Parakeet" in (engine as Record<string, unknown>)) return "Parakeet";
   if ("CloudOpenAI" in (engine as Record<string, unknown>)) return "OpenAI";
   if ("CloudGroq" in (engine as Record<string, unknown>)) return "Groq";

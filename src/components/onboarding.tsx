@@ -21,7 +21,7 @@ const STEPS = [
     icon: Download,
     title: "Download a Model",
     description:
-      "You need a speech-to-text model to transcribe. We recommend starting with Whisper Base (148 MB).",
+      "You need a speech-to-text model to transcribe. We recommend starting with Whisper Base (~150 MB).",
   },
   {
     icon: Keyboard,
@@ -141,12 +141,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     {downloading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Downloading Whisper Base (148 MB)...
+                        Downloading Whisper Base...
                       </>
                     ) : (
                       <>
                         <Download className="h-4 w-4 mr-2" />
-                        Download Whisper Base (148 MB)
+                        Download Whisper Base (~150 MB)
                       </>
                     )}
                   </Button>
