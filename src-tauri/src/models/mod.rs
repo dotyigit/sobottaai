@@ -1,5 +1,6 @@
 pub mod parakeet_models;
 pub mod whisper_models;
+pub mod whisper_onnx_models;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -20,6 +21,7 @@ pub struct ModelInfo {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Engine {
     Whisper,
+    WhisperOnnx,
     Parakeet,
     CloudOpenAI,
     CloudGroq,
@@ -96,6 +98,7 @@ pub fn cloud_models() -> Vec<ModelInfo> {
 
 pub fn full_catalog() -> Vec<ModelInfo> {
     let mut catalog = whisper_models::catalog();
+    catalog.extend(whisper_onnx_models::catalog());
     catalog.extend(parakeet_models::catalog());
     catalog.extend(cloud_models());
     catalog
@@ -110,9 +113,13 @@ mod tests {
     fn full_catalog_contains_all_models() {
         let catalog = full_catalog();
         let whisper_count = whisper_models::catalog().len();
+        let whisper_onnx_count = whisper_onnx_models::catalog().len();
         let parakeet_count = parakeet_models::catalog().len();
         let cloud_count = cloud_models().len();
-        assert_eq!(catalog.len(), whisper_count + parakeet_count + cloud_count);
+        assert_eq!(
+            catalog.len(),
+            whisper_count + whisper_onnx_count + parakeet_count + cloud_count
+        );
     }
 
     #[test]

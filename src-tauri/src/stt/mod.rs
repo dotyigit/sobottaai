@@ -2,6 +2,7 @@ pub mod cloud_groq;
 pub mod cloud_openai;
 pub mod parakeet;
 pub mod whisper;
+pub mod whisper_onnx;
 
 use serde::{Deserialize, Serialize};
 

@@ -2,6 +2,7 @@ use crate::commands::recording::{self, RecordingState};
 use crate::models;
 use crate::stt::parakeet::ParakeetEngine;
 use crate::stt::whisper::WhisperEngine;
+use crate::stt::whisper_onnx::WhisperOnnxEngine;
 use crate::stt::{SttEngine, TranscriptionOptions, TranscriptionResult};
 use std::collections::HashMap;
 use std::path::Path;
@@ -55,6 +56,22 @@ impl SttManager {
                 let whisper = WhisperEngine::new(&model_path)
                     .map_err(|e| format!("Failed to load Whisper model: {}", e))?;
                 Arc::new(whisper)
+            }
+            models::Engine::WhisperOnnx => {
+                // Derive model prefix from encoder filename: "{prefix}-encoder.int8.onnx"
+                let encoder_file = model_info
+                    .files
+                    .iter()
+                    .find(|f| f.ends_with("-encoder.int8.onnx"))
+                    .ok_or_else(|| {
+                        format!("No encoder file found for model '{}'", model_id)
+                    })?;
+                let prefix = encoder_file
+                    .strip_suffix("-encoder.int8.onnx")
+                    .unwrap_or("whisper");
+                let engine = WhisperOnnxEngine::new(&model_dir, prefix)
+                    .map_err(|e| format!("Failed to load WhisperOnnx model: {}", e))?;
+                Arc::new(engine)
             }
             models::Engine::Parakeet => {
                 let parakeet = ParakeetEngine::new(&model_dir)
