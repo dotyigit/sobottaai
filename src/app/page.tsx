@@ -11,11 +11,13 @@ import { QuickSettings } from "@/components/quick-settings";
 import { Onboarding } from "@/components/onboarding";
 import { useRecording } from "@/hooks/use-recording";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useIsMac, formatHotkeyDisplay } from "@/lib/hotkey-utils";
 
 export default function Home() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const { onboardingComplete, setOnboardingComplete, _hydrated } = useSettingsStore();
+  const { onboardingComplete, setOnboardingComplete, defaultHotkey, _hydrated } = useSettingsStore();
+  const isMac = useIsMac();
   const {
     isRecording,
     isTranscribing,
@@ -108,7 +110,7 @@ export default function Home() {
                 Press{" "}
                 <kbd className="rounded border border-border/60 bg-muted/60 px-1.5 py-0.5 text-xs font-mono text-foreground/70">
                   <Keyboard className="inline h-3 w-3 mr-0.5 -mt-0.5" />
-                  Option+Space
+                  {formatHotkeyDisplay(defaultHotkey, isMac)}
                 </kbd>{" "}
                 to start
               </>

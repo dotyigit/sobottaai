@@ -1,41 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Mic, Download, Keyboard, Sparkles, ArrowRight, Check, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useIsMac } from "@/lib/hotkey-utils";
 
 interface OnboardingProps {
   onComplete: () => void;
 }
 
-const STEPS = [
-  {
-    icon: Mic,
-    title: "Welcome to SobottaAI",
-    description:
-      "Open-source voice-to-text with local AI. Your voice data stays on your device — no cloud required.",
-  },
-  {
-    icon: Download,
-    title: "Download a Model",
-    description:
-      "You need a speech-to-text model to transcribe. We recommend starting with Whisper Base (~150 MB).",
-  },
-  {
-    icon: Keyboard,
-    title: "Your Hotkey",
-    description:
-      "Press and hold Option+Space (Alt+Space on Windows/Linux) to record. Release to transcribe and paste.",
-  },
-  {
-    icon: Sparkles,
-    title: "You're All Set!",
-    description:
-      "Start dictating anywhere. Your transcriptions will appear in the active text field. Check Settings for more options.",
-  },
-];
+function getSteps(isMac: boolean) {
+  const hotkeyName = isMac ? "Option+Space" : "Alt+Space";
+  return [
+    {
+      icon: Mic,
+      title: "Welcome to SobottaAI",
+      description:
+        "Open-source voice-to-text with local AI. Your voice data stays on your device — no cloud required.",
+    },
+    {
+      icon: Download,
+      title: "Download a Model",
+      description:
+        "You need a speech-to-text model to transcribe. We recommend starting with Whisper Base (~150 MB).",
+    },
+    {
+      icon: Keyboard,
+      title: "Your Hotkey",
+      description:
+        `Press and hold ${hotkeyName} to record. Release to transcribe and paste.`,
+    },
+    {
+      icon: Sparkles,
+      title: "You're All Set!",
+      description:
+        "Start dictating anywhere. Your transcriptions will appear in the active text field. Check Settings for more options.",
+    },
+  ];
+}
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -48,10 +52,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const setSelectedModel = useSettingsStore((s) => s.setSelectedModel);
+  const isMac = useIsMac();
+  const steps = useMemo(() => getSteps(isMac), [isMac]);
 
-  const current = STEPS[step];
+  const current = steps[step];
   const Icon = current.icon;
-  const isLast = step === STEPS.length - 1;
+  const isLast = step === steps.length - 1;
   const isModelStep = step === 1;
 
   async function downloadBaseModel() {
@@ -173,7 +179,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {/* Progress dots */}
         <div className="flex justify-center gap-2 mt-8">
-          {STEPS.map((_, i) => (
+          {steps.map((_, i) => (
             <motion.div
               key={i}
               className="h-2 rounded-full"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { KeyboardMusic, ToggleLeft, Circle, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
-
-function useIsMac() {
-  const [isMac] = useState(() => {
-    if (typeof navigator !== "undefined") {
-      return navigator.userAgent.includes("Mac");
-    }
-    return true;
-  });
-  return isMac;
-}
+import { useIsMac, parseHotkeyKeys, getHotkeyPresets } from "@/lib/hotkey-utils";
 
 /** Render a single keyboard key as a styled badge */
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -28,44 +19,13 @@ function Kbd({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Parse a hotkey string into display-friendly key names */
-function parseHotkeyKeys(hotkey: string, isMac: boolean): string[] {
-  return hotkey.split("+").map((key) => {
-    switch (key) {
-      case "CommandOrControl":
-        return isMac ? "\u2318 Cmd" : "Ctrl";
-      case "Alt":
-        return isMac ? "\u2325 Option" : "Alt";
-      case "Shift":
-        return "\u21E7 Shift";
-      case "Space":
-        return "\u2423 Space";
-      default:
-        // Handle e.code format: KeyA → A, Digit1 → 1
-        if (key.startsWith("Key")) return key.slice(3);
-        if (key.startsWith("Digit")) return key.slice(5);
-        if (key.startsWith("Arrow")) return key.slice(5);
-        if (key.startsWith("Numpad")) return "Num" + key.slice(6);
-        return key;
-    }
-  });
-}
-
-const HOTKEY_PRESETS = [
-  { value: "Alt+Space", label: "Option + Space", description: "Quick single-hand access" },
-  { value: "CommandOrControl+Shift+Space", label: "Cmd + Shift + Space", description: "Standard app shortcut" },
-  { value: "CommandOrControl+Shift+H", label: "Cmd + Shift + H", description: "H for \"hear\"" },
-  { value: "CommandOrControl+Shift+R", label: "Cmd + Shift + R", description: "R for \"record\"" },
-  { value: "F9", label: "F9", description: "Function key (no modifiers)" },
-  { value: "F10", label: "F10", description: "Function key (no modifiers)" },
-];
-
 export default function HotkeySettings() {
   const { defaultHotkey, setDefaultHotkey, recordingMode, setRecordingMode } =
     useSettingsStore();
   const [recording, setRecording] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string | null>(null);
   const isMac = useIsMac();
+  const presets = useMemo(() => getHotkeyPresets(isMac), [isMac]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -113,7 +73,7 @@ export default function HotkeySettings() {
     }
   }
 
-  const isCustomHotkey = !HOTKEY_PRESETS.some((p) => p.value === defaultHotkey);
+  const isCustomHotkey = !presets.some((p) => p.value === defaultHotkey);
 
   return (
     <div className="space-y-8">
@@ -130,7 +90,7 @@ export default function HotkeySettings() {
           Recording Hotkey
         </Label>
         <div className="grid grid-cols-2 gap-2">
-          {HOTKEY_PRESETS.map((preset) => {
+          {presets.map((preset) => {
             const isSelected = defaultHotkey === preset.value;
             const keys = parseHotkeyKeys(preset.value, isMac);
             return (

@@ -1,37 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Extract the pure functions from hotkeys page for testing.
-// We re-implement them here since they're defined inside the component module.
-
-function parseHotkeyKeys(hotkey: string, isMac: boolean): string[] {
-  return hotkey.split("+").map((key) => {
-    switch (key) {
-      case "CommandOrControl":
-        return isMac ? "\u2318 Cmd" : "Ctrl";
-      case "Alt":
-        return isMac ? "\u2325 Option" : "Alt";
-      case "Shift":
-        return "\u21E7 Shift";
-      case "Space":
-        return "\u2423 Space";
-      default:
-        if (key.startsWith("Key")) return key.slice(3);
-        if (key.startsWith("Digit")) return key.slice(5);
-        if (key.startsWith("Arrow")) return key.slice(5);
-        if (key.startsWith("Numpad")) return "Num" + key.slice(6);
-        return key;
-    }
-  });
-}
-
-const HOTKEY_PRESETS = [
-  { value: "Alt+Space", label: "Option + Space", description: "Quick single-hand access" },
-  { value: "CommandOrControl+Shift+Space", label: "Cmd + Shift + Space", description: "Standard app shortcut" },
-  { value: "CommandOrControl+Shift+H", label: "Cmd + Shift + H", description: 'H for "hear"' },
-  { value: "CommandOrControl+Shift+R", label: "Cmd + Shift + R", description: 'R for "record"' },
-  { value: "F9", label: "F9", description: "Function key (no modifiers)" },
-  { value: "F10", label: "F10", description: "Function key (no modifiers)" },
-];
+import { parseHotkeyKeys, formatHotkeyDisplay, getHotkeyPresets } from "@/lib/hotkey-utils";
 
 describe("parseHotkeyKeys", () => {
   // ── macOS ─────────────────────────────────────────────────
@@ -70,12 +38,22 @@ describe("parseHotkeyKeys", () => {
 
     it("parses CommandOrControl as Ctrl", () => {
       const keys = parseHotkeyKeys("CommandOrControl+Shift+Space", isMac);
-      expect(keys).toEqual(["Ctrl", "\u21E7 Shift", "\u2423 Space"]);
+      expect(keys).toEqual(["Ctrl", "Shift", "Space"]);
     });
 
     it("parses Alt as Alt (not Option)", () => {
       const keys = parseHotkeyKeys("Alt+Space", isMac);
-      expect(keys).toEqual(["Alt", "\u2423 Space"]);
+      expect(keys).toEqual(["Alt", "Space"]);
+    });
+
+    it("does not include unicode symbols for Shift", () => {
+      const keys = parseHotkeyKeys("Shift+KeyA", isMac);
+      expect(keys).toEqual(["Shift", "A"]);
+    });
+
+    it("does not include unicode symbols for Space", () => {
+      const keys = parseHotkeyKeys("Space", isMac);
+      expect(keys).toEqual(["Space"]);
     });
   });
 
@@ -142,34 +120,72 @@ describe("parseHotkeyKeys", () => {
   });
 });
 
-describe("HOTKEY_PRESETS", () => {
+describe("formatHotkeyDisplay", () => {
+  it("formats for macOS with symbols", () => {
+    expect(formatHotkeyDisplay("Alt+Space", true)).toBe(
+      "\u2325 Option + \u2423 Space"
+    );
+  });
+
+  it("formats for Windows/Linux without symbols", () => {
+    expect(formatHotkeyDisplay("Alt+Space", false)).toBe("Alt + Space");
+  });
+
+  it("formats complex combo for macOS", () => {
+    expect(formatHotkeyDisplay("CommandOrControl+Shift+KeyF", true)).toBe(
+      "\u2318 Cmd + \u21E7 Shift + F"
+    );
+  });
+
+  it("formats complex combo for Windows/Linux", () => {
+    expect(formatHotkeyDisplay("CommandOrControl+Shift+KeyF", false)).toBe(
+      "Ctrl + Shift + F"
+    );
+  });
+});
+
+describe("getHotkeyPresets", () => {
   it("has 6 presets", () => {
-    expect(HOTKEY_PRESETS).toHaveLength(6);
+    expect(getHotkeyPresets(true)).toHaveLength(6);
+    expect(getHotkeyPresets(false)).toHaveLength(6);
   });
 
   it("all presets have unique values", () => {
-    const values = HOTKEY_PRESETS.map((p) => p.value);
+    const values = getHotkeyPresets(true).map((p) => p.value);
     expect(new Set(values).size).toBe(values.length);
   });
 
   it("all presets have non-empty labels and descriptions", () => {
-    for (const preset of HOTKEY_PRESETS) {
+    for (const preset of getHotkeyPresets(true)) {
       expect(preset.label).toBeTruthy();
       expect(preset.description).toBeTruthy();
     }
   });
 
   it("default hotkey is the first preset", () => {
-    expect(HOTKEY_PRESETS[0].value).toBe("Alt+Space");
+    expect(getHotkeyPresets(true)[0].value).toBe("Alt+Space");
   });
 
   it("custom hotkey detection works", () => {
+    const presets = getHotkeyPresets(true);
     const isCustom = (hotkey: string) =>
-      !HOTKEY_PRESETS.some((p) => p.value === hotkey);
+      !presets.some((p) => p.value === hotkey);
 
     expect(isCustom("Alt+Space")).toBe(false);
     expect(isCustom("F9")).toBe(false);
     expect(isCustom("CommandOrControl+Shift+KeyF")).toBe(true);
     expect(isCustom("Alt+KeyK")).toBe(true);
+  });
+
+  it("shows macOS labels on macOS", () => {
+    const presets = getHotkeyPresets(true);
+    expect(presets[0].label).toBe("Option + Space");
+    expect(presets[1].label).toBe("Cmd + Shift + Space");
+  });
+
+  it("shows Windows/Linux labels on non-Mac", () => {
+    const presets = getHotkeyPresets(false);
+    expect(presets[0].label).toBe("Alt + Space");
+    expect(presets[1].label).toBe("Ctrl + Shift + Space");
   });
 });
