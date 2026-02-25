@@ -1,8 +1,17 @@
 # SobottaAI
 
+[![GitHub release](https://img.shields.io/github/v/release/dotyigit/sobottaai)](https://github.com/dotyigit/sobottaai/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/dotyigit/sobottaai/ci.yml?branch=main&label=CI)](https://github.com/dotyigit/sobottaai/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
+
 Open-source, cross-platform voice-to-text desktop app with AI post-processing. Press a hotkey, speak, and your transcribed text is automatically pasted into any application.
 
 Built with **Tauri v2** (Rust) + **Next.js** + **shadcn/ui**.
+
+<p align="center">
+  <img src="public/workflow.gif" alt="SobottaAI demo" width="600" />
+</p>
 
 ## Features
 
